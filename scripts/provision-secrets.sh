@@ -227,8 +227,10 @@ if [[ -z "${KEY_ARGS[gateway/auth-token]:-}" && -n "${OPENCLAW_GATEWAY_TOKEN:-}"
 fi
 
 gw_val="${KEY_ARGS[gateway/auth-token]:-}"
-if [[ -z "$gw_val" && ! $NO_PROMPT ]]; then
-  echo -e "\n${CYAN}[2/3] OpenClaw gateway auth token (required for gateway to start)${NC}"
+# Do not use [[ ... && ! $NO_PROMPT ]] — with NO_PROMPT=false that becomes [[ ! false ]] where
+# "false" is a non-empty string (true), so ! makes the test fail and the gateway step is skipped.
+if [[ -z "$gw_val" ]] && ! $NO_PROMPT; then
+  echo -e "\n${CYAN}[2/4] OpenClaw gateway auth token (required for gateway to start)${NC}"
   echo -e "  ${YELLOW}Tip:${NC} set OPENCLAW_GATEWAY_TOKEN in .env or pass ${YELLOW}--gateway-token${NC} / ${YELLOW}--generate-gateway-token${NC}"
   gw_val=$(prompt_secret "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" "")
 fi
