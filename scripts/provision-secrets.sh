@@ -198,7 +198,7 @@ api_post() {
 # Authenticate
 # ---------------------------------------------------------------------------
 
-echo -e "\n${CYAN}[1/3] Authenticating with CipherTrust Secrets Manager...${NC}"
+echo -e "\n${CYAN}[1/4] Authenticating with CipherTrust Secrets Manager...${NC}"
 if [[ -n "$ADMIN_ACCESS_ID" ]]; then
   echo -e "  Using admin credentials"
 fi
@@ -217,13 +217,33 @@ fi
 echo -e "  ${GREEN}Authenticated (token prefix: ${TOKEN:0:12}...)${NC}"
 
 # ---------------------------------------------------------------------------
-# Collect keys
+# OpenClaw gateway token (first — env OPENCLAW_GATEWAY_TOKEN, --gateway-token, or prompt)
 # ---------------------------------------------------------------------------
 
-echo -e "\n${CYAN}[2/3] Collecting API keys (Gateway token first — required for OpenClaw; press Enter to skip optional providers)...${NC}"
+declare -A SECRETS=()
+
+if [[ -z "${KEY_ARGS[gateway/auth-token]:-}" && -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]]; then
+  KEY_ARGS[gateway/auth-token]="$OPENCLAW_GATEWAY_TOKEN"
+fi
+
+gw_val="${KEY_ARGS[gateway/auth-token]:-}"
+if [[ -z "$gw_val" && ! $NO_PROMPT ]]; then
+  echo -e "\n${CYAN}[2/3] OpenClaw gateway auth token (required for gateway to start)${NC}"
+  echo -e "  ${YELLOW}Tip:${NC} set OPENCLAW_GATEWAY_TOKEN in .env or pass ${YELLOW}--gateway-token${NC} / ${YELLOW}--generate-gateway-token${NC}"
+  gw_val=$(prompt_secret "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" "")
+fi
+
+if [[ -n "$gw_val" ]]; then
+  SECRETS[gateway/auth-token]="$gw_val"
+fi
+
+# ---------------------------------------------------------------------------
+# Remaining API keys (optional providers)
+# ---------------------------------------------------------------------------
+
+echo -e "\n${CYAN}[3/4] Other API keys (press Enter to skip each)...${NC}"
 
 PROVIDERS=(
-  "gateway/auth-token|OpenClaw Gateway Auth Token (required)|OPENCLAW_GATEWAY_TOKEN"
   "providers/openai-api-key|OpenAI API Key|OPENAI_API_KEY"
   "providers/google-api-key|Google/Gemini Key|GEMINI_API_KEY"
   "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
@@ -276,7 +296,7 @@ fi
 # Provision
 # ---------------------------------------------------------------------------
 
-echo -e "\n${CYAN}[3/3] Provisioning ${#SECRETS[@]} secret(s) in CipherTrust Secrets Manager...${NC}"
+echo -e "\n${CYAN}[4/4] Provisioning ${#SECRETS[@]} secret(s) in CipherTrust Secrets Manager...${NC}"
 
 created=0; updated=0; failed=0
 

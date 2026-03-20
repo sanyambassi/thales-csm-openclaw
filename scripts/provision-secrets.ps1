@@ -62,14 +62,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if ($GenerateGatewayToken -and -not $GatewayToken) {
-  $bytes = New-Object byte[] 32
-  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-  $rng.GetBytes($bytes)
-  $GatewayToken = -join ($bytes | ForEach-Object { $_.ToString("x2") })
-}
-
-# ---- Auto-load .env if present ----
+# ---- Auto-load .env if present (before gateway token / generate) ----
 $scriptDir = Split-Path -Parent $PSScriptRoot
 foreach ($candidate in @("$scriptDir\.env", "$PWD\.env")) {
   if (Test-Path $candidate) {
@@ -83,6 +76,15 @@ foreach ($candidate in @("$scriptDir\.env", "$PWD\.env")) {
     }
     break
   }
+}
+
+if (-not $GatewayToken) { $GatewayToken = $env:OPENCLAW_GATEWAY_TOKEN }
+
+if ($GenerateGatewayToken -and -not $GatewayToken) {
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $GatewayToken = -join ($bytes | ForEach-Object { $_.ToString("x2") })
 }
 
 # ---- Resolve credentials (admin > read-only > env > prompt) ----
@@ -107,7 +109,7 @@ if (-not $EffectiveKey) {
 }
 
 # ---- Authenticate ----
-Write-Host "`n[1/3] Authenticating with CipherTrust Secrets Manager..." -ForegroundColor Cyan
+Write-Host "`n[1/4] Authenticating with CipherTrust Secrets Manager..." -ForegroundColor Cyan
 if ($AdminAccessId) { Write-Host "  Using admin credentials" -ForegroundColor Yellow }
 $authBody = @{
   "access-id"   = $EffectiveId
@@ -120,10 +122,20 @@ $authResp = Invoke-RestMethod -Uri "$GatewayUrl/v2/auth" `
 $token = $authResp.token
 Write-Host "  Authenticated (token prefix: $($token.Substring(0,12))...)" -ForegroundColor Green
 
-# ---- Collect keys ----
-Write-Host "`n[2/3] Collecting API keys (press Enter to skip a provider)..." -ForegroundColor Cyan
-
+# ---- Gateway token first (env OPENCLAW_GATEWAY_TOKEN, -GatewayToken, or prompt) ----
 $secrets = @{}
+
+if (-not $GatewayToken -and -not $NoPrompt) {
+  Write-Host "`n[2/4] OpenClaw gateway auth token (required for gateway to start)" -ForegroundColor Cyan
+  Write-Host "  Tip: set OPENCLAW_GATEWAY_TOKEN in .env or use -GenerateGatewayToken" -ForegroundColor Yellow
+  $sec = Read-Host "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" -AsSecureString
+  if ($sec) {
+    $GatewayToken = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+    Write-Host "  ********" -ForegroundColor DarkGray
+  }
+}
+
+if ($GatewayToken) { $secrets["gateway/auth-token"] = $GatewayToken }
 
 function PromptKey($name, $param, $envHint) {
   if ($param) { return $param }
@@ -133,8 +145,9 @@ function PromptKey($name, $param, $envHint) {
   return $null
 }
 
+Write-Host "`n[3/4] Other API keys (press Enter to skip each)..." -ForegroundColor Cyan
+
 $keys = @(
-  @{ name = "OpenClaw Gateway Auth Token (required)"; path = "gateway/auth-token"; param = $GatewayToken; hint = "OPENCLAW_GATEWAY_TOKEN" },
   @{ name = "OpenAI API Key";           path = "providers/openai-api-key";                  param = $OpenAIKey;      hint = "OPENAI_API_KEY" },
   @{ name = "Google/Gemini Key";        path = "providers/google-api-key";                  param = $GoogleKey;      hint = "GEMINI_API_KEY" },
   @{ name = "Anthropic API Key";        path = "providers/anthropic-api-key";               param = $AnthropicKey;   hint = "ANTHROPIC_API_KEY" },
@@ -178,7 +191,7 @@ if ($secrets.Count -eq 0) {
 }
 
 # ---- Provision ----
-Write-Host "`n[3/3] Provisioning $($secrets.Count) secret(s) in CipherTrust Secrets Manager..." -ForegroundColor Cyan
+Write-Host "`n[4/4] Provisioning $($secrets.Count) secret(s) in CipherTrust Secrets Manager..." -ForegroundColor Cyan
 
 $created = 0
 $updated = 0

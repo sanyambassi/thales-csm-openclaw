@@ -16,6 +16,8 @@ services:
       AKEYLESS_GATEWAY_URL: "${AKEYLESS_GATEWAY_URL}"
       AKEYLESS_ACCESS_ID: "${AKEYLESS_ACCESS_ID}"
       AKEYLESS_ACCESS_KEY: "${AKEYLESS_ACCESS_KEY}"
+      # If set, entrypoint uses this instead of CipherTrust SecretRef for gateway.auth.token
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN:-}"
       NODE_OPTIONS: "--max-old-space-size=1536"
       # --- Per-provider baseUrl overrides (uncomment to customize) ---
       # OPENAI_BASE_URL: "https://my-openai-proxy.example.com/v1"

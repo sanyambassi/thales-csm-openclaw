@@ -270,13 +270,12 @@ Provision only what you need. Unprovisioned providers are inactive — they don'
 
 ## Environment variables
 
-Only CipherTrust connection credentials are needed as env vars — everything else comes from SecretRefs:
-
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `AKEYLESS_GATEWAY_URL` | Yes | CipherTrust Secrets Manager endpoint |
 | `AKEYLESS_ACCESS_ID` | Yes | Read-only access ID for the resolver |
 | `AKEYLESS_ACCESS_KEY` | Yes | Corresponding access key |
+| `OPENCLAW_GATEWAY_TOKEN` | No | If set on the **container**, entrypoint writes it to `openclaw.json` and **overrides** the CipherTrust SecretRef (plaintext on disk inside the container — prefer CSM for production). Same var in **`.env`** is read by the provision script to pre-fill or upload the gateway secret. |
 | `<PROVIDER>_BASE_URL` | No | Override a provider's default API endpoint (e.g., `OPENAI_BASE_URL`) |
 | `ROTATION_WEBHOOK_ENABLED` | No | Set `true` to enable rotation webhook |
 | `ROTATION_WEBHOOK_PORT` | No | Webhook port (default: 9090) |

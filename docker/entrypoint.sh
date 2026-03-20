@@ -2,20 +2,41 @@
 
 # CipherTrust Secrets Manager entrypoint for OpenClaw.
 #
-# LLM API keys and the gateway auth token are resolved natively by
-# OpenClaw's SecretRef system (in-memory snapshot, no env vars).
+# LLM API keys are resolved via OpenClaw SecretRef (in-memory snapshot).
+# Gateway auth token: CipherTrust SecretRef by default, or OPENCLAW_GATEWAY_TOKEN
+# env (entrypoint patches config — overrides SecretRef).
 #
 # Web search provider keys (Brave, Firecrawl, Tavily, Perplexity) are
 # resolved from CipherTrust at startup and exported as env vars, since
 # OpenClaw's web search subsystem reads them from the environment.
 #
-# This entrypoint handles four tasks before handing off to OpenClaw:
+# This entrypoint handles these tasks before handing off to OpenClaw:
+#   0. Optional: gateway.auth.token from OPENCLAW_GATEWAY_TOKEN (bypasses SecretRef)
 #   1. Prune providers whose secrets are not provisioned in CipherTrust
 #   2. Resolve web search API keys from CipherTrust → env vars
 #   3. Apply per-provider baseUrl overrides from env vars
 #   4. Start the rotation webhook (if enabled)
 
 CONFIG="/home/node/.openclaw/openclaw.json"
+
+# ---------------------------------------------------------------------------
+# 0. Gateway token from env (optional dev / alternate to CipherTrust)
+# ---------------------------------------------------------------------------
+
+if [ -n "$OPENCLAW_GATEWAY_TOKEN" ] && [ -f "$CONFIG" ]; then
+  node -e '
+    const fs = require("fs");
+    const p = process.argv[1];
+    const t = process.env.OPENCLAW_GATEWAY_TOKEN;
+    if (!t) process.exit(0);
+    const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+    if (!cfg.gateway) cfg.gateway = {};
+    if (!cfg.gateway.auth) cfg.gateway.auth = {};
+    cfg.gateway.auth.token = t;
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+    process.stderr.write("[entrypoint] gateway.auth.token from OPENCLAW_GATEWAY_TOKEN (env; overrides SecretRef)\n");
+  ' "$CONFIG" 2>&1
+fi
 
 # ---------------------------------------------------------------------------
 # 1 & 2. Authenticate once, prune unprovisioned providers, resolve web search keys
