@@ -9,27 +9,28 @@
 # resolved from CipherTrust at startup and exported as env vars, since
 # OpenClaw's web search subsystem reads them from the environment.
 #
-# This entrypoint handles three tasks before handing off to OpenClaw:
-#   1. Resolve web search API keys from CipherTrust → env vars
-#   2. Apply per-provider baseUrl overrides from env vars
-#   3. Start the rotation webhook (if enabled)
+# This entrypoint handles four tasks before handing off to OpenClaw:
+#   1. Prune providers whose secrets are not provisioned in CipherTrust
+#   2. Resolve web search API keys from CipherTrust → env vars
+#   3. Apply per-provider baseUrl overrides from env vars
+#   4. Start the rotation webhook (if enabled)
 
 CONFIG="/home/node/.openclaw/openclaw.json"
 
 # ---------------------------------------------------------------------------
-# 1. Resolve web search API keys from CipherTrust
-#    Stored under /openclaw/websearch/ — exported as env vars for OpenClaw's
-#    web search subsystem. Only provisioned keys are exported; missing keys
-#    are silently skipped.
+# 1 & 2. Authenticate once, prune unprovisioned providers, resolve web search keys
 # ---------------------------------------------------------------------------
 
 if [ -n "$AKEYLESS_GATEWAY_URL" ] && [ -n "$AKEYLESS_ACCESS_ID" ] && [ -n "$AKEYLESS_ACCESS_KEY" ]; then
   eval "$(node -e '
     const https = require("https");
     const http = require("http");
+    const fs = require("fs");
     const GW = (process.env.AKEYLESS_GATEWAY_URL || "").replace(/\/+$/, "");
     const ID = process.env.AKEYLESS_ACCESS_ID;
     const KEY = process.env.AKEYLESS_ACCESS_KEY;
+    const CONFIG = process.argv[1];
+    const PREFIX = process.env.AKEYLESS_SECRET_PREFIX || "/openclaw";
 
     const WS_SECRETS = {
       "websearch/brave-api-key":      "BRAVE_API_KEY",
@@ -72,33 +73,63 @@ if [ -n "$AKEYLESS_GATEWAY_URL" ] && [ -n "$AKEYLESS_ACCESS_ID" ] && [ -n "$AKEY
         const token = auth.token;
         if (!token) { process.exit(0); }
 
-        const prefix = "/openclaw";
-        const paths = Object.keys(WS_SECRETS).map(k => prefix + "/" + k);
-        let secretMap = {};
-        try { secretMap = await post(GW + "/v2/get-secret-value", { names: paths, token }); } catch {}
+        // --- Prune unprovisioned LLM providers from config ---
+        let cfg;
+        try { cfg = JSON.parse(fs.readFileSync(CONFIG, "utf8")); } catch { cfg = null; }
+        if (cfg && cfg.models && cfg.models.providers) {
+          const providerNames = Object.keys(cfg.models.providers);
+          const providerPaths = providerNames.map(n => {
+            const ref = cfg.models.providers[n].apiKey;
+            if (ref && ref.id) return PREFIX + "/" + ref.id;
+            return null;
+          });
+          const allPaths = providerPaths.filter(Boolean);
+          if (allPaths.length > 0) {
+            let secretMap = {};
+            try { secretMap = await post(GW + "/v2/get-secret-value", { names: allPaths, token }); } catch {}
+            const removed = [];
+            for (let i = 0; i < providerNames.length; i++) {
+              const path = providerPaths[i];
+              if (path && !secretMap[path]) {
+                delete cfg.models.providers[providerNames[i]];
+                removed.push(providerNames[i]);
+              }
+            }
+            if (removed.length > 0) {
+              fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+              process.stderr.write("[entrypoint] Pruned " + removed.length + " unprovisioned provider(s): " + removed.join(", ") + "\n");
+            } else {
+              process.stderr.write("[entrypoint] All " + providerNames.length + " provider(s) verified in CipherTrust\n");
+            }
+          }
+        }
 
-        let count = 0;
+        // --- Resolve web search keys → env vars ---
+        const wsPaths = Object.keys(WS_SECRETS).map(k => PREFIX + "/" + k);
+        let wsMap = {};
+        try { wsMap = await post(GW + "/v2/get-secret-value", { names: wsPaths, token }); } catch {}
+        let wsCount = 0;
         for (const [shortId, envVar] of Object.entries(WS_SECRETS)) {
-          const fullPath = prefix + "/" + shortId;
-          const val = secretMap[fullPath];
+          const fullPath = PREFIX + "/" + shortId;
+          const val = wsMap[fullPath];
           if (val) {
             const safe = String(val).replace(/[\x27\x5c]/g, "");
             process.stdout.write("export " + envVar + "=\x27" + safe + "\x27\n");
-            count++;
+            wsCount++;
           }
         }
-        if (count > 0) {
-          process.stderr.write("[entrypoint] Resolved " + count + " web search key(s) from CipherTrust\n");
+        if (wsCount > 0) {
+          process.stderr.write("[entrypoint] Resolved " + wsCount + " web search key(s) from CipherTrust\n");
         }
       } catch (err) {
-        process.stderr.write("[entrypoint] Web search key resolution skipped: " + err.message + "\n");
+        process.stderr.write("[entrypoint] CipherTrust preflight skipped: " + err.message + "\n");
       }
     })();
-  ')"
+  ' "$CONFIG")"
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Apply baseUrl overrides from env vars
+# 3. Apply baseUrl overrides from env vars
 #    Set <PROVIDER>_BASE_URL to override the default baseUrl for any provider.
 # ---------------------------------------------------------------------------
 
@@ -140,7 +171,7 @@ if [ -f "$CONFIG" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Start the rotation webhook in the background (if enabled)
+# 4. Start the rotation webhook in the background (if enabled)
 # ---------------------------------------------------------------------------
 
 if [ "$ROTATION_WEBHOOK_ENABLED" = "true" ]; then

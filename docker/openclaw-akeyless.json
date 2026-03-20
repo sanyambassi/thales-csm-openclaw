@@ -110,15 +110,6 @@
     }
   },
 
-  "plugins": {
-    "entries": {
-      "brave":      { "enabled": true },
-      "firecrawl":  { "enabled": true },
-      "tavily":     { "enabled": true },
-      "perplexity": { "enabled": true }
-    }
-  },
-
   "tools": {
     "web": {
       "search": {

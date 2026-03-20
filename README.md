@@ -142,15 +142,18 @@ docker compose up -d
 
 ## How it works
 
-Secrets are resolved from CipherTrust at startup through two complementary mechanisms:
+At container startup, the custom entrypoint authenticates with CipherTrust once and performs two key operations before handing off to OpenClaw:
+
+1. **Provider pruning** — checks which LLM provider secrets are actually provisioned in CipherTrust and removes any unprovisioned providers from the config. This lets the image ship with 15 pre-configured providers while only activating the ones you've provisioned.
+2. **Web search key resolution** — fetches web search API keys (Brave, Firecrawl, Tavily, Perplexity) from CipherTrust and exports them as in-memory env vars.
+
+Once OpenClaw starts, it resolves the remaining secrets natively:
 
 - **Gateway auth token** — resolved via the `akeyless` exec provider (OpenClaw SecretRef), stored in OpenClaw's in-memory snapshot. Never in env vars or on disk.
-- **LLM API keys** — each provider in `models.providers` has an `apiKey` SecretRef pointing to CipherTrust. Resolved at startup and stored in the in-memory snapshot. Never in env vars or on disk.
-- **Web search API keys** (Brave, Firecrawl, Tavily, Perplexity) — resolved from CipherTrust by `entrypoint.sh` and exported as **in-memory env vars**. OpenClaw's web search plugins auto-detect these from the environment (e.g., `PERPLEXITY_API_KEY`). The plugins are explicitly enabled in the shipped config. Gemini, Grok, and Kimi web search reuse their LLM provider keys (already in the snapshot).
+- **LLM API keys** — each remaining provider has an `apiKey` SecretRef pointing to CipherTrust. Resolved at startup into the in-memory snapshot. Never in env vars or on disk.
+- **Web search API keys** — auto-detected from the env vars set by the entrypoint (e.g., `PERPLEXITY_API_KEY`). Gemini, Grok, and Kimi web search reuse their LLM provider keys (already in the snapshot).
 
-> **Why env vars for web search?** OpenClaw's plugin system does not currently support SecretRef objects in `plugins.entries.<plugin>.config.webSearch.apiKey`. Web search keys are lower-value (no billing risk for most providers) and are only held as in-memory env vars — never written to disk.
-
-Unprovisioned providers are silently skipped.
+> **Why env vars for web search?** OpenClaw's plugin system does not currently support SecretRef objects for web search API keys. These keys are only held as in-memory env vars — never written to disk.
 
 ```
 CipherTrust Appliance
@@ -159,15 +162,17 @@ CipherTrust Appliance
 │   └── /v2/get-secret-value
 │
 └── OpenClaw Container (this image)
-    ├── entrypoint.sh
+    ├── entrypoint.sh (runs before OpenClaw)
+    │   ├── Authenticates with CipherTrust
+    │   ├── Prunes unprovisioned providers from config
     │   └── Fetches web search keys → in-memory env vars
     ├── akeyless-resolver (exec SecretRef provider)
-    │   ├── Authenticates with CipherTrust Secrets Manager
+    │   ├── Called by OpenClaw at startup for each SecretRef
     │   └── Returns secrets via OpenClaw exec protocol
     └── OpenClaw Runtime
         ├── Gateway token   → SecretRef → in-memory snapshot
         ├── LLM API keys    → SecretRef → in-memory snapshot
-        └── Web search keys → env vars (auto-detected by plugins)
+        └── Web search keys → env vars (auto-detected)
 ```
 
 ## Pre-configured providers
