@@ -108,6 +108,9 @@ Ensure `/openclaw/gateway/auth-token` exists in CipherTrust (provision step **[2
 **Gateway healthy but chat / agent calls fail?**  
 OpenClaw often defaults the agent model to **Anthropic (e.g. Claude Opus)**. If you did not provision **`/openclaw/providers/anthropic-api-key`**, either add an Anthropic API key in CipherTrust or change the default model to a provider you did provision (the provision scripts print a reminder when Anthropic was skipped).
 
+**Control UI / browser access from other hosts?**  
+The bundled `docker/openclaw-akeyless.json` sets **`gateway.controlUi.allowedOrigins` to `["*"]`** so the Control UI can connect from any browser origin when the gateway is published (e.g. `http://your-server:18789`). This is convenient for remote access but **less strict than an explicit allowlist** — keep **gateway token auth** enabled and avoid exposing the port to the public internet unless you understand the risk. To lock down: edit `docker/openclaw-akeyless.json` before build (or mount a custom `openclaw.json`) and list only trusted origins, e.g. `["https://control.example.com"]` (see [OpenClaw gateway configuration](https://docs.openclaw.ai/gateway/configuration-reference)).
+
 ---
 
 ## Option B: Build your own image

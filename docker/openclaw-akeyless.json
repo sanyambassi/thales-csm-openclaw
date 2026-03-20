@@ -107,6 +107,9 @@
     "bind": "lan",
     "auth": {
       "token": { "source": "exec", "provider": "akeyless", "id": "gateway/auth-token" }
+    },
+    "controlUi": {
+      "allowedOrigins": ["*"]
     }
   },
 

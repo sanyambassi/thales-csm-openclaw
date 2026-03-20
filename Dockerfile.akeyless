@@ -17,6 +17,9 @@ CMD ["docker-entrypoint.sh", "node", "openclaw.mjs", "gateway", "--allow-unconfi
 #   AKEYLESS_ACCESS_ID      - Read-only access ID
 #   AKEYLESS_ACCESS_KEY     - Corresponding access key
 #
+# Control UI: openclaw.json sets gateway.controlUi.allowedOrigins ["*"] for remote
+# browser access; tighten before production if the gateway is reachable from untrusted networks.
+#
 # LLM API keys and the gateway auth token are resolved via
 # OpenClaw's native SecretRef system (in-memory snapshot, no env vars).
 # Web search keys (Brave, Firecrawl, Tavily, Perplexity) are resolved
