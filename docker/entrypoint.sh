@@ -78,29 +78,26 @@ if [ -n "$AKEYLESS_GATEWAY_URL" ] && [ -n "$AKEYLESS_ACCESS_ID" ] && [ -n "$AKEY
         try { cfg = JSON.parse(fs.readFileSync(CONFIG, "utf8")); } catch { cfg = null; }
         if (cfg && cfg.models && cfg.models.providers) {
           const providerNames = Object.keys(cfg.models.providers);
-          const providerPaths = providerNames.map(n => {
-            const ref = cfg.models.providers[n].apiKey;
-            if (ref && ref.id) return PREFIX + "/" + ref.id;
-            return null;
-          });
-          const allPaths = providerPaths.filter(Boolean);
-          if (allPaths.length > 0) {
-            let secretMap = {};
-            try { secretMap = await post(GW + "/v2/get-secret-value", { names: allPaths, token }); } catch {}
-            const removed = [];
-            for (let i = 0; i < providerNames.length; i++) {
-              const path = providerPaths[i];
-              if (path && !secretMap[path]) {
-                delete cfg.models.providers[providerNames[i]];
-                removed.push(providerNames[i]);
-              }
+          const removed = [];
+          for (const name of providerNames) {
+            const ref = cfg.models.providers[name].apiKey;
+            if (!ref || !ref.id) continue;
+            const secretPath = PREFIX + "/" + ref.id;
+            try {
+              const result = await post(GW + "/v2/get-secret-value", { names: [secretPath], token });
+              if (!result[secretPath]) throw new Error("empty");
+            } catch {
+              delete cfg.models.providers[name];
+              removed.push(name);
             }
-            if (removed.length > 0) {
-              fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
-              process.stderr.write("[entrypoint] Pruned " + removed.length + " unprovisioned provider(s): " + removed.join(", ") + "\n");
-            } else {
-              process.stderr.write("[entrypoint] All " + providerNames.length + " provider(s) verified in CipherTrust\n");
-            }
+          }
+          if (removed.length > 0) {
+            fs.writeFileSync(CONFIG, JSON.stringify(cfg, null, 2));
+            process.stderr.write("[entrypoint] Pruned " + removed.length + " unprovisioned provider(s): " + removed.join(", ") + "\n");
+          }
+          const active = providerNames.length - removed.length;
+          if (active > 0) {
+            process.stderr.write("[entrypoint] " + active + " provider(s) verified in CipherTrust\n");
           }
         }
 
