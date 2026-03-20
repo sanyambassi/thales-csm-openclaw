@@ -59,7 +59,7 @@ chmod +x scripts/*.sh
 .\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ```
 
-Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest.
+Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use. **Interactive mode:** at any provider prompt, type **`done`**, **`skip`**, **`q`**, or **`end`** to skip all remaining provider prompts and go straight to provisioning (same in `provision-secrets.sh` and `provision-secrets.ps1`). Press Enter on a line to skip only that provider.
 
 **Gateway auth token (`/openclaw/gateway/auth-token`) is required** — without it OpenClaw fails with `gateway.auth.token resolved to a non-string or empty value`. The provision script asks for it first. To create only that secret (e.g. after fixing a failed deploy):
 
@@ -104,6 +104,9 @@ The entrypoint probes each provider path in the config. **Any secret that still 
 
 **`gateway.auth.token` empty or unresolved?**  
 Ensure `/openclaw/gateway/auth-token` exists in CipherTrust (provision step **[2/4]**), or set **`OPENCLAW_GATEWAY_TOKEN`** for the container (see [Environment variables](#environment-variables)).
+
+**Gateway healthy but chat / agent calls fail?**  
+OpenClaw often defaults the agent model to **Anthropic (e.g. Claude Opus)**. If you did not provision **`/openclaw/providers/anthropic-api-key`**, either add an Anthropic API key in CipherTrust or change the default model to a provider you did provision (the provision scripts print a reminder when Anthropic was skipped).
 
 ---
 

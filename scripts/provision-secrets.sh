@@ -11,6 +11,7 @@
 #
 # Usage:
 #   # Interactive - prompts for credentials and each provider key
+#   # At any provider prompt: type done/skip/q to skip all remaining providers
 #   ./provision-secrets.sh
 #
 #   # With admin credentials (recommended when using separate read-only + admin roles)
@@ -243,13 +244,15 @@ fi
 # Remaining API keys (optional providers)
 # ---------------------------------------------------------------------------
 
-echo -e "\n${CYAN}[3/4] Other API keys (press Enter to skip each)...${NC}"
+echo -e "\n${CYAN}[3/4] Other API keys${NC}"
+echo -e "  ${YELLOW}Tip:${NC} Enter a key, press Enter to skip ${YELLOW}one${NC} provider, or type ${YELLOW}done${NC} / ${YELLOW}skip${NC} / ${YELLOW}q${NC} to skip ${YELLOW}all remaining${NC} prompts and provision."
+echo ""
 
 PROVIDERS=(
   "providers/openai-api-key|OpenAI API Key|OPENAI_API_KEY"
   "providers/google-api-key|Google/Gemini Key|GEMINI_API_KEY"
-  "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
   "providers/xai-api-key|xAI/Grok API Key|XAI_API_KEY"
+  "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
   "providers/perplexity-api-key|Perplexity API Key|PERPLEXITY_API_KEY"
   "providers/mistral-api-key|Mistral API Key|MISTRAL_API_KEY"
   "providers/groq-api-key|Groq API Key|GROQ_API_KEY"
@@ -285,6 +288,11 @@ for entry in "${PROVIDERS[@]}"; do
   existing="${KEY_ARGS[$path]:-}"
   val=$(prompt_value "$name [$hint]" "$existing")
   if [[ -n "$val" ]]; then
+    lv=$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')
+    if [[ "$lv" == "done" || "$lv" == "skip" || "$lv" == "q" || "$lv" == "end" ]]; then
+      echo -e "  ${CYAN}→ Skipping remaining provider prompts; continuing to provision.${NC}"
+      break
+    fi
     SECRETS[$path]="$val"
   fi
 done
@@ -352,3 +360,8 @@ for path in "${!SECRETS[@]}"; do
 done
 
 echo -e "\n${CYAN}Provisioning complete.${NC}"
+
+if [[ -z "${SECRETS[providers/anthropic-api-key]:-}" ]]; then
+  echo -e "\n  ${YELLOW}Note:${NC} This run did not include an Anthropic API key. OpenClaw often ${YELLOW}defaults the agent model to Anthropic (Claude Opus)${NC}. If the gateway runs but agent/chat fails, either ${YELLOW}add an Anthropic key${NC} in CipherTrust or ${YELLOW}change the default model${NC} to a provider you configured."
+  echo -e "  ${CYAN}(If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)${NC}"
+fi

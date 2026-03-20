@@ -7,7 +7,7 @@
 # Gateway token is prompted in step [2/4] after CipherTrust auth (or use env / flags below).
 #
 # Usage:
-#   # Interactive
+#   # Interactive (at any provider prompt: type done/skip/q to skip the rest)
 #   .\provision-secrets.ps1
 #
 #   # Non-interactive — gateway + providers (OpenClaw requires gateway/auth-token in CSM)
@@ -153,13 +153,15 @@ function PromptKey($name, $param, $envHint) {
   return $null
 }
 
-Write-Host "`n[3/4] Other API keys (press Enter to skip each)..." -ForegroundColor Cyan
+Write-Host "`n[3/4] Other API keys" -ForegroundColor Cyan
+Write-Host "  Tip: Enter a key, press Enter to skip one provider, or type done / skip / q to skip all remaining prompts." -ForegroundColor Yellow
+Write-Host ""
 
 $keys = @(
   @{ name = "OpenAI API Key";           path = "providers/openai-api-key";                  param = $OpenAIKey;      hint = "OPENAI_API_KEY" },
   @{ name = "Google/Gemini Key";        path = "providers/google-api-key";                  param = $GoogleKey;      hint = "GEMINI_API_KEY" },
-  @{ name = "Anthropic API Key";        path = "providers/anthropic-api-key";               param = $AnthropicKey;   hint = "ANTHROPIC_API_KEY" },
   @{ name = "xAI/Grok API Key";        path = "providers/xai-api-key";                     param = $XAIKey;         hint = "XAI_API_KEY" },
+  @{ name = "Anthropic API Key";        path = "providers/anthropic-api-key";               param = $AnthropicKey;   hint = "ANTHROPIC_API_KEY" },
   @{ name = "Perplexity API Key";       path = "providers/perplexity-api-key";              param = $PerplexityKey;  hint = "PERPLEXITY_API_KEY" },
   @{ name = "Mistral API Key";          path = "providers/mistral-api-key";                 param = $MistralKey;     hint = "MISTRAL_API_KEY" },
   @{ name = "Groq API Key";            path = "providers/groq-api-key";                    param = $GroqKey;        hint = "GROQ_API_KEY" },
@@ -190,7 +192,13 @@ $keys = @(
 
 foreach ($k in $keys) {
   $val = PromptKey $k.name $k.param $k.hint
-  if ($val) { $secrets[$k.path] = $val }
+  if ([string]::IsNullOrWhiteSpace($val)) { continue }
+  $t = $val.Trim().ToLowerInvariant()
+  if ($t -eq "done" -or $t -eq "skip" -or $t -eq "q" -or $t -eq "end") {
+    Write-Host "  -> Skipping remaining provider prompts; continuing to provision." -ForegroundColor Cyan
+    break
+  }
+  $secrets[$k.path] = $val.Trim()
 }
 
 if ($secrets.Count -eq 0) {
@@ -276,3 +284,9 @@ foreach ($entry in $secrets.GetEnumerator()) {
 }
 
 Write-Host "`nProvisioning complete." -ForegroundColor Cyan
+
+if (-not $secrets.ContainsKey("providers/anthropic-api-key")) {
+  Write-Host ""
+  Write-Host "  Note: This run did not include an Anthropic API key. OpenClaw often defaults the agent model to Anthropic (Claude Opus). If the gateway runs but agent/chat fails, either add an Anthropic key in CipherTrust or change the default model to a provider you configured." -ForegroundColor Yellow
+  Write-Host "  (If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)" -ForegroundColor Cyan
+}
