@@ -94,7 +94,7 @@ if [ -n "$AKEYLESS_GATEWAY_URL" ] && [ -n "$AKEYLESS_ACCESS_ID" ] && [ -n "$AKEY
         process.stderr.write("[entrypoint] Web search key resolution skipped: " + err.message + "\n");
       }
     })();
-  ' 2>&1)"
+  ')"
 fi
 
 # ---------------------------------------------------------------------------

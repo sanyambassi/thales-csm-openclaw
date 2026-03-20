@@ -115,6 +115,7 @@ The script prompts for the CipherTrust URL, admin credentials, and each API key 
 # Linux/macOS — make scripts executable first
 chmod +x scripts/*.sh
 
+# Run the provisioning script (prompts for everything — no files needed)
 ./scripts/provision-secrets.sh           # Linux/macOS (bash)
 .\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ```
