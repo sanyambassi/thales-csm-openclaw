@@ -20,6 +20,8 @@
 
 param(
   [string]$GatewayUrl,
+  [string]$AdminAccessId,
+  [string]$AdminAccessKey,
   [string]$AccessId,
   [string]$AccessKey,
   [string]$OpenAIKey,
@@ -59,20 +61,49 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ---- Prompt for missing values ----
+# ---- Auto-load .env if present ----
+$scriptDir = Split-Path -Parent $PSScriptRoot
+foreach ($candidate in @("$scriptDir\.env", "$PWD\.env")) {
+  if (Test-Path $candidate) {
+    Get-Content $candidate | ForEach-Object {
+      if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$' -and $_ -notmatch '^\s*#') {
+        $k = $Matches[1]; $v = $Matches[2].Trim('"').Trim("'")
+        if (-not [Environment]::GetEnvironmentVariable($k)) {
+          [Environment]::SetEnvironmentVariable($k, $v)
+        }
+      }
+    }
+    break
+  }
+}
+
+# ---- Resolve credentials (admin > read-only > env > prompt) ----
+if (-not $GatewayUrl) { $GatewayUrl = $env:AKEYLESS_GATEWAY_URL }
+if (-not $AdminAccessId)  { $AdminAccessId  = $env:AKEYLESS_ADMIN_ACCESS_ID }
+if (-not $AdminAccessKey) { $AdminAccessKey = $env:AKEYLESS_ADMIN_ACCESS_KEY }
+if (-not $AccessId)  { $AccessId  = $env:AKEYLESS_ACCESS_ID }
+if (-not $AccessKey) { $AccessKey = $env:AKEYLESS_ACCESS_KEY }
+
+$EffectiveId  = if ($AdminAccessId)  { $AdminAccessId }  else { $AccessId }
+$EffectiveKey = if ($AdminAccessKey) { $AdminAccessKey } else { $AccessKey }
+
 if (-not $GatewayUrl) {
   $GatewayUrl = Read-Host "CipherTrust Secrets Manager URL (e.g. https://host/akeyless-api)"
 }
 $GatewayUrl = $GatewayUrl.TrimEnd("/")
 
-if (-not $AccessId)  { $AccessId  = Read-Host "Access ID" }
-if (-not $AccessKey) { $AccessKey = Read-Host "Access Key" }
+if (-not $EffectiveId)  { $EffectiveId  = Read-Host "Admin Access ID (or read-only if same role)" }
+if (-not $EffectiveKey) {
+  $secureKey = Read-Host "Admin Access Key" -AsSecureString
+  $EffectiveKey = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey))
+}
 
 # ---- Authenticate ----
 Write-Host "`n[1/3] Authenticating with CipherTrust Secrets Manager..." -ForegroundColor Cyan
+if ($AdminAccessId) { Write-Host "  Using admin credentials" -ForegroundColor Yellow }
 $authBody = @{
-  "access-id"   = $AccessId
-  "access-key"  = $AccessKey
+  "access-id"   = $EffectiveId
+  "access-key"  = $EffectiveKey
   "access-type" = "access_key"
 } | ConvertTo-Json
 

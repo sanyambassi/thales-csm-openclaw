@@ -3,21 +3,24 @@
 # Provisions LLM provider API keys into CipherTrust Secrets Manager (powered by Akeyless).
 # Run this once during initial setup, or when rotating keys.
 #
-# The script reads CipherTrust credentials from:
-#   1. Command-line flags (--gateway-url, --access-id, --access-key)
-#   2. Environment variables (AKEYLESS_GATEWAY_URL, AKEYLESS_ACCESS_ID, AKEYLESS_ACCESS_KEY)
+# Credentials are resolved in this order (first non-empty wins):
+#   1. Admin-specific flags/env vars (--admin-access-id / AKEYLESS_ADMIN_ACCESS_ID)
+#   2. General flags/env vars (--access-id / AKEYLESS_ACCESS_ID)
 #   3. .env file in the repo root (auto-loaded if present)
-#   4. Interactive prompts (if none of the above)
+#   4. Interactive prompts
 #
 # Usage:
 #   # Interactive - prompts for credentials and each provider key
 #   ./provision-secrets.sh
 #
-#   # Non-interactive via flags
+#   # With admin credentials (recommended when using separate read-only + admin roles)
 #   ./provision-secrets.sh \
 #     --gateway-url "https://host/akeyless-api" \
-#     --access-id "p-..." --access-key "..." \
-#     --openai "sk-..." --google "AIza..." --no-prompt
+#     --admin-access-id "p-admin-..." --admin-access-key "..." \
+#     --openai "sk-..." --no-prompt
+#
+#   # Falls back to read-only credentials from .env if no admin creds given
+#   ./provision-secrets.sh --openai "sk-..." --no-prompt
 
 set -uo pipefail
 
@@ -26,6 +29,8 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 
 GATEWAY_URL="${AKEYLESS_GATEWAY_URL:-${GATEWAY_URL:-}}"
+ADMIN_ACCESS_ID="${AKEYLESS_ADMIN_ACCESS_ID:-}"
+ADMIN_ACCESS_KEY="${AKEYLESS_ADMIN_ACCESS_KEY:-}"
 ACCESS_ID="${AKEYLESS_ACCESS_ID:-${ACCESS_ID:-}}"
 ACCESS_KEY="${AKEYLESS_ACCESS_KEY:-${ACCESS_KEY:-}}"
 SECRET_PREFIX="${AKEYLESS_SECRET_PREFIX:-${SECRET_PREFIX:-/openclaw}}"
@@ -35,10 +40,12 @@ declare -A KEY_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --gateway-url)   GATEWAY_URL="$2"; shift 2;;
-    --access-id)     ACCESS_ID="$2"; shift 2;;
-    --access-key)    ACCESS_KEY="$2"; shift 2;;
-    --secret-prefix) SECRET_PREFIX="$2"; shift 2;;
+    --gateway-url)       GATEWAY_URL="$2"; shift 2;;
+    --admin-access-id)   ADMIN_ACCESS_ID="$2"; shift 2;;
+    --admin-access-key)  ADMIN_ACCESS_KEY="$2"; shift 2;;
+    --access-id)         ACCESS_ID="$2"; shift 2;;
+    --access-key)        ACCESS_KEY="$2"; shift 2;;
+    --secret-prefix)     SECRET_PREFIX="$2"; shift 2;;
     --no-prompt)     NO_PROMPT=true; shift;;
     --openai)        KEY_ARGS[providers/openai-api-key]="$2"; shift 2;;
     --google)        KEY_ARGS[providers/google-api-key]="$2"; shift 2;;
@@ -110,9 +117,15 @@ for candidate in "$REPO_ROOT/.env" "$PWD/.env"; do
 done
 
 # Re-read after .env load (env vars might have been set)
-GATEWAY_URL="${AKEYLESS_GATEWAY_URL:-${GATEWAY_URL:-}}"
-ACCESS_ID="${AKEYLESS_ACCESS_ID:-${ACCESS_ID:-}}"
-ACCESS_KEY="${AKEYLESS_ACCESS_KEY:-${ACCESS_KEY:-}}"
+GATEWAY_URL="${GATEWAY_URL:-${AKEYLESS_GATEWAY_URL:-}}"
+ADMIN_ACCESS_ID="${ADMIN_ACCESS_ID:-${AKEYLESS_ADMIN_ACCESS_ID:-}}"
+ADMIN_ACCESS_KEY="${ADMIN_ACCESS_KEY:-${AKEYLESS_ADMIN_ACCESS_KEY:-}}"
+ACCESS_ID="${ACCESS_ID:-${AKEYLESS_ACCESS_ID:-}}"
+ACCESS_KEY="${ACCESS_KEY:-${AKEYLESS_ACCESS_KEY:-}}"
+
+# Admin credentials take priority over read-only ones
+EFFECTIVE_ID="${ADMIN_ACCESS_ID:-$ACCESS_ID}"
+EFFECTIVE_KEY="${ADMIN_ACCESS_KEY:-$ACCESS_KEY}"
 
 # ---------------------------------------------------------------------------
 # Prompt helpers
@@ -148,14 +161,14 @@ if [[ -z "$GATEWAY_URL" ]]; then
 fi
 GATEWAY_URL="${GATEWAY_URL%/}"
 
-if [[ -z "$ACCESS_ID" ]]; then
-  ACCESS_ID=$(prompt_value "Access ID" "")
+if [[ -z "$EFFECTIVE_ID" ]]; then
+  EFFECTIVE_ID=$(prompt_value "Admin Access ID (or read-only if same role)" "")
 fi
-if [[ -z "$ACCESS_KEY" ]]; then
-  ACCESS_KEY=$(prompt_secret "Access Key" "")
+if [[ -z "$EFFECTIVE_KEY" ]]; then
+  EFFECTIVE_KEY=$(prompt_secret "Admin Access Key" "")
 fi
 
-if [[ -z "$GATEWAY_URL" || -z "$ACCESS_ID" || -z "$ACCESS_KEY" ]]; then
+if [[ -z "$GATEWAY_URL" || -z "$EFFECTIVE_ID" || -z "$EFFECTIVE_KEY" ]]; then
   echo -e "\n  ${RED}Error: CipherTrust URL, Access ID, and Access Key are all required.${NC}"
   exit 1
 fi
@@ -177,7 +190,10 @@ api_post() {
 # ---------------------------------------------------------------------------
 
 echo -e "\n${CYAN}[1/3] Authenticating with CipherTrust Secrets Manager...${NC}"
-AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${ACCESS_ID}\",\"access-key\":\"${ACCESS_KEY}\",\"access-type\":\"access_key\"}" || true)
+if [[ -n "$ADMIN_ACCESS_ID" ]]; then
+  echo -e "  Using admin credentials"
+fi
+AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${EFFECTIVE_ID}\",\"access-key\":\"${EFFECTIVE_KEY}\",\"access-type\":\"access_key\"}" || true)
 TOKEN=$(echo "$AUTH_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -z "$TOKEN" ]]; then
