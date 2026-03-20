@@ -4,9 +4,15 @@ FROM ghcr.io/openclaw/openclaw:${OPENCLAW_TAG}
 LABEL description="OpenClaw with Thales CipherTrust Secrets Manager integration (powered by Akeyless)"
 LABEL maintainer="sanyambassi"
 
-COPY --chmod=755 --chown=1000:1000 docker/akeyless-resolver.js /usr/local/bin/akeyless-resolver
-COPY --chmod=755 --chown=1000:1000 docker/rotation-webhook.js /usr/local/bin/rotation-webhook.js
-COPY --chmod=755 --chown=1000:1000 docker/entrypoint.sh /usr/local/bin/akeyless-entrypoint.sh
+# Copy then strip CR — Windows checkouts often use CRLF; a \r in the shebang makes Linux report
+# "exec …: no such file or directory" (it looks for /bin/sh\r).
+COPY docker/akeyless-resolver.js /usr/local/bin/akeyless-resolver
+COPY docker/rotation-webhook.js /usr/local/bin/rotation-webhook.js
+COPY docker/entrypoint.sh /usr/local/bin/akeyless-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js \
+  && chmod 755 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js \
+  && chown 1000:1000 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js
+
 COPY --chown=1000:1000 docker/openclaw-akeyless.json /home/node/.openclaw/openclaw.json
 
 ENTRYPOINT ["/usr/local/bin/akeyless-entrypoint.sh"]

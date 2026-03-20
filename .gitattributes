@@ -1,0 +1,4 @@
+# Shell scripts must use LF so Linux containers can exec them (Windows CRLF breaks shebang).
+*.sh text eol=lf
+docker/*.sh text eol=lf
+scripts/*.sh text eol=lf

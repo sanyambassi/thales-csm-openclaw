@@ -148,6 +148,8 @@ chmod +x scripts/*.sh
 docker build --build-arg OPENCLAW_TAG=latest -f Dockerfile.akeyless -t thales-csm-openclaw:latest .
 ```
 
+**Windows:** If the container logs `exec /usr/local/bin/akeyless-entrypoint.sh: no such file or directory`, the cause is almost always **CRLF line endings** in `docker/entrypoint.sh` on checkout. The Dockerfile strips `\r` during build; use a fresh **`docker build`** (add `--no-cache` if you still see the error). The repo’s **`.gitattributes`** keeps `*.sh` as LF on clone; re-clone or run `git add --renormalize .` after pulling that file.
+
 ### 5. Run
 
 ```bash
