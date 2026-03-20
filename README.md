@@ -108,8 +108,7 @@ Ensure `/openclaw/gateway/auth-token` exists in CipherTrust (provision step **[2
 **Gateway healthy but chat / agent calls fail?**  
 OpenClaw often defaults the agent model to **Anthropic (e.g. Claude Opus)**. If you did not provision **`/openclaw/providers/anthropic-api-key`**, either add an Anthropic API key in CipherTrust or change the default model to a provider you did provision (the provision scripts print a reminder when Anthropic was skipped).
 
-**Control UI / browser access from other hosts?**  
-The bundled `docker/openclaw-akeyless.json` sets **`gateway.controlUi.allowedOrigins` to `["*"]`** so the Control UI can connect from any browser origin when the gateway is published (e.g. `http://your-server:18789`). This is convenient for remote access but **less strict than an explicit allowlist** — keep **gateway token auth** enabled and avoid exposing the port to the public internet unless you understand the risk. To lock down: edit `docker/openclaw-akeyless.json` before build (or mount a custom `openclaw.json`) and list only trusted origins, e.g. `["https://control.example.com"]` (see [OpenClaw gateway configuration](https://docs.openclaw.ai/gateway/configuration-reference)).
+**Control UI from another machine / browser?** See [Control UI (browser origins)](#control-ui-browser-origins) — same behavior for pulled images and local builds.
 
 ---
 
@@ -161,6 +160,18 @@ docker logs -f openclaw   # follow startup; Ctrl+C to stop (container keeps runn
 > ./scripts/build-and-push.sh --user yourusername        # Linux/macOS
 > .\scripts\build-and-push.ps1 -DockerHubUser yourusername  # Windows
 > ```
+
+**Control UI from another machine / browser?** See [Control UI (browser origins)](#control-ui-browser-origins).
+
+---
+
+## Control UI (browser origins)
+
+**Pre-built image (Option A) and local `docker build` (Option B) are the same:** `Dockerfile.akeyless` copies [`docker/openclaw-akeyless.json`](docker/openclaw-akeyless.json) into the image as `openclaw.json`, including **`gateway.controlUi.allowedOrigins`: `["*"]`**. That allows the Control UI to connect from **any browser origin** when the gateway is reachable on the network (e.g. `http://your-server:18789`).
+
+This is convenient for remote access but **less strict than an explicit allowlist**. Keep **gateway token auth** enabled, and avoid exposing port **18789** to the public internet unless you understand the risk.
+
+**To restrict origins:** edit `docker/openclaw-akeyless.json` **before** `docker build`, or mount a custom `openclaw.json`, and set e.g. `["https://control.example.com"]`. See [OpenClaw gateway configuration](https://docs.openclaw.ai/gateway/configuration-reference).
 
 ---
 
