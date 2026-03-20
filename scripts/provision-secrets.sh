@@ -92,8 +92,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Colors
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+# Colors — bright ANSI so text stays readable on light *and* dark terminal backgrounds
+# (dim gray/cyan often washes out on white; standard red/green can be faint on black)
+RED='\033[91m'; GREEN='\033[92m'; HINT='\033[94m'; CYAN='\033[96m'; NC='\033[0m'
 
 # ---------------------------------------------------------------------------
 # Auto-load .env if present (look in script dir parent or cwd)
@@ -234,14 +235,14 @@ if [[ -n "$gw_val" ]]; then
   echo -e "\n${CYAN}[2/4] OpenClaw gateway auth token${NC}"
   if [[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" && "$gw_val" == "$OPENCLAW_GATEWAY_TOKEN" ]]; then
     echo -e "  ${GREEN}Using OPENCLAW_GATEWAY_TOKEN from environment or .env — skipping prompt.${NC}"
-    echo -e "  ${YELLOW}Want a prompt instead?${NC} ${YELLOW}unset OPENCLAW_GATEWAY_TOKEN${NC} or remove it from ${YELLOW}.env${NC} for this run."
+    echo -e "  ${HINT}Want a prompt instead?${NC} ${HINT}unset OPENCLAW_GATEWAY_TOKEN${NC} or remove it from ${HINT}.env${NC} for this run."
   else
-    echo -e "  ${GREEN}Using gateway token from ${YELLOW}--gateway-token${NC} or ${YELLOW}--generate-gateway-token${NC} — skipping prompt.${NC}"
+    echo -e "  ${GREEN}Using gateway token from ${HINT}--gateway-token${NC} or ${HINT}--generate-gateway-token${NC} — skipping prompt.${NC}"
   fi
 fi
 if [[ -z "$gw_val" ]] && ! $NO_PROMPT; then
   echo -e "\n${CYAN}[2/4] OpenClaw gateway auth token (required for gateway to start)${NC}"
-  echo -e "  ${YELLOW}Tip:${NC} set OPENCLAW_GATEWAY_TOKEN in .env or pass ${YELLOW}--gateway-token${NC} / ${YELLOW}--generate-gateway-token${NC}"
+  echo -e "  ${HINT}Tip:${NC} set OPENCLAW_GATEWAY_TOKEN in .env or pass ${HINT}--gateway-token${NC} / ${HINT}--generate-gateway-token${NC}"
   gw_val=$(prompt_secret "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" "")
 fi
 
@@ -254,7 +255,7 @@ fi
 # ---------------------------------------------------------------------------
 
 echo -e "\n${CYAN}[3/4] Other API keys${NC}"
-echo -e "  ${YELLOW}Tip:${NC} Enter a key, press Enter to skip ${YELLOW}one${NC} provider, or type ${YELLOW}done${NC} / ${YELLOW}skip${NC} / ${YELLOW}q${NC} to skip ${YELLOW}all remaining${NC} prompts and provision."
+echo -e "  ${HINT}Tip:${NC} Enter a key, press Enter to skip ${HINT}one${NC} provider, or type ${HINT}done${NC} / ${HINT}skip${NC} / ${HINT}q${NC} to skip ${HINT}all remaining${NC} prompts and provision."
 echo ""
 
 PROVIDERS=(
@@ -299,7 +300,7 @@ for entry in "${PROVIDERS[@]}"; do
   if [[ -n "$val" ]]; then
     lv=$(printf '%s' "$val" | tr '[:upper:]' '[:lower:]')
     if [[ "$lv" == "done" || "$lv" == "skip" || "$lv" == "q" || "$lv" == "end" ]]; then
-      echo -e "  ${CYAN}→ Skipping remaining provider prompts; continuing to provision.${NC}"
+      echo -e "  ${HINT}→ Skipping remaining provider prompts; continuing to provision.${NC}"
       break
     fi
     SECRETS[$path]="$val"
@@ -307,7 +308,7 @@ for entry in "${PROVIDERS[@]}"; do
 done
 
 if [[ ${#SECRETS[@]} -eq 0 ]]; then
-  echo -e "\n  ${YELLOW}No keys provided - nothing to provision.${NC}"
+  echo -e "\n  ${HINT}No keys provided - nothing to provision.${NC}"
   exit 0
 fi
 
@@ -334,7 +335,7 @@ for path in "${!SECRETS[@]}"; do
       echo -e "${RED}FAILED (update)${NC}"
       ((failed++))
     else
-      echo -e "${YELLOW}UPDATED${NC}"
+      echo -e "${HINT}UPDATED${NC}"
       ((updated++))
     fi
   elif echo "$resp" | grep -qi "error\|fail"; then
@@ -371,6 +372,6 @@ done
 echo -e "\n${CYAN}Provisioning complete.${NC}"
 
 if [[ -z "${SECRETS[providers/anthropic-api-key]:-}" ]]; then
-  echo -e "\n  ${YELLOW}Note:${NC} This run did not include an Anthropic API key. OpenClaw often ${YELLOW}defaults the agent model to Anthropic (Claude Opus)${NC}. If the gateway runs but agent/chat fails, either ${YELLOW}add an Anthropic key${NC} in CipherTrust or ${YELLOW}change the default model${NC} to a provider you configured."
-  echo -e "  ${CYAN}(If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)${NC}"
+  echo -e "\n  ${HINT}Note:${NC} This run did not include an Anthropic API key. OpenClaw often ${HINT}defaults the agent model to Anthropic (Claude Opus)${NC}. If the gateway runs but agent/chat fails, either ${HINT}add an Anthropic key${NC} in CipherTrust or ${HINT}change the default model${NC} to a provider you configured."
+  echo -e "  ${HINT}(If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)${NC}"
 fi

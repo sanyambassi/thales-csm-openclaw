@@ -6,6 +6,9 @@
 # Credentials: auto-loads repo .env (AKEYLESS_* , OPENCLAW_GATEWAY_TOKEN, AKEYLESS_ADMIN_*).
 # Gateway token is prompted in step [2/4] after CipherTrust auth (or use env / flags below).
 #
+# Output colors use Magenta (steps), Blue (tips/hints), Green/Red (ok/error) for readability on
+# light and dark terminal backgrounds.
+#
 # Usage:
 #   # Interactive (at any provider prompt: type done/skip/q to skip the rest)
 #   .\provision-secrets.ps1
@@ -112,8 +115,8 @@ if (-not $EffectiveKey) {
 }
 
 # ---- Authenticate ----
-Write-Host "`n[1/4] Authenticating with CipherTrust Secrets Manager..." -ForegroundColor Cyan
-if ($AdminAccessId) { Write-Host "  Using admin credentials" -ForegroundColor Yellow }
+Write-Host "`n[1/4] Authenticating with CipherTrust Secrets Manager..." -ForegroundColor Magenta
+if ($AdminAccessId) { Write-Host "  Using admin credentials" -ForegroundColor Blue }
 $authBody = @{
   "access-id"   = $EffectiveId
   "access-key"  = $EffectiveKey
@@ -132,21 +135,21 @@ $secrets = @{}
 
 $needsGatewayPrompt = [string]::IsNullOrWhiteSpace($GatewayToken) -and -not $NoPrompt.IsPresent
 if (-not $needsGatewayPrompt -and -not [string]::IsNullOrWhiteSpace($GatewayToken)) {
-  Write-Host "`n[2/4] OpenClaw gateway auth token" -ForegroundColor Cyan
+  Write-Host "`n[2/4] OpenClaw gateway auth token" -ForegroundColor Magenta
   if ($GatewayToken -eq $env:OPENCLAW_GATEWAY_TOKEN) {
     Write-Host "  Using OPENCLAW_GATEWAY_TOKEN from environment or .env — skipping prompt." -ForegroundColor Green
-    Write-Host "  Want a prompt instead? Remove OPENCLAW_GATEWAY_TOKEN from .env or clear it for this session." -ForegroundColor Yellow
+    Write-Host "  Want a prompt instead? Remove OPENCLAW_GATEWAY_TOKEN from .env or clear it for this session." -ForegroundColor Blue
   } else {
     Write-Host "  Using gateway token from -GatewayToken or -GenerateGatewayToken — skipping prompt." -ForegroundColor Green
   }
 }
 if ($needsGatewayPrompt) {
-  Write-Host "`n[2/4] OpenClaw gateway auth token (required for gateway to start)" -ForegroundColor Cyan
-  Write-Host "  Tip: set OPENCLAW_GATEWAY_TOKEN in .env or use -GenerateGatewayToken" -ForegroundColor Yellow
+  Write-Host "`n[2/4] OpenClaw gateway auth token (required for gateway to start)" -ForegroundColor Magenta
+  Write-Host "  Tip: set OPENCLAW_GATEWAY_TOKEN in .env or use -GenerateGatewayToken" -ForegroundColor Blue
   $sec = Read-Host "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" -AsSecureString
   if ($sec) {
     $GatewayToken = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-    Write-Host "  ********" -ForegroundColor DarkGray
+    Write-Host "  ********" -ForegroundColor Blue
   }
 }
 
@@ -162,8 +165,8 @@ function PromptKey($name, $param, $envHint) {
   return $null
 }
 
-Write-Host "`n[3/4] Other API keys" -ForegroundColor Cyan
-Write-Host "  Tip: Enter a key, press Enter to skip one provider, or type done / skip / q to skip all remaining prompts." -ForegroundColor Yellow
+Write-Host "`n[3/4] Other API keys" -ForegroundColor Magenta
+Write-Host "  Tip: Enter a key, press Enter to skip one provider, or type done / skip / q to skip all remaining prompts." -ForegroundColor Blue
 Write-Host ""
 
 $keys = @(
@@ -204,23 +207,23 @@ foreach ($k in $keys) {
   if ([string]::IsNullOrWhiteSpace($val)) { continue }
   $t = $val.Trim().ToLowerInvariant()
   if ($t -eq "done" -or $t -eq "skip" -or $t -eq "q" -or $t -eq "end") {
-    Write-Host "  -> Skipping remaining provider prompts; continuing to provision." -ForegroundColor Cyan
+    Write-Host "  -> Skipping remaining provider prompts; continuing to provision." -ForegroundColor Blue
     break
   }
   $secrets[$k.path] = $val.Trim()
 }
 
 if ($secrets.Count -eq 0) {
-  Write-Host "`n  No keys provided - nothing to provision." -ForegroundColor Yellow
+  Write-Host "`n  No keys provided - nothing to provision." -ForegroundColor Blue
   exit 0
 }
 
 if ($NoPrompt.IsPresent -and -not $secrets.ContainsKey("gateway/auth-token")) {
-  Write-Warning "This run did not include a gateway token. OpenClaw needs /openclaw/gateway/auth-token in CSM or OPENCLAW_GATEWAY_TOKEN on the container (see README)."
+  Write-Host "WARNING: This run did not include a gateway token. OpenClaw needs /openclaw/gateway/auth-token in CSM or OPENCLAW_GATEWAY_TOKEN on the container (see README)." -ForegroundColor Blue
 }
 
 # ---- Provision ----
-Write-Host "`n[4/4] Provisioning $($secrets.Count) secret(s) in CipherTrust Secrets Manager..." -ForegroundColor Cyan
+Write-Host "`n[4/4] Provisioning $($secrets.Count) secret(s) in CipherTrust Secrets Manager..." -ForegroundColor Magenta
 
 $created = 0
 $updated = 0
@@ -253,7 +256,7 @@ foreach ($entry in $secrets.GetEnumerator()) {
       try {
         Invoke-RestMethod -Uri "$GatewayUrl/v2/update-secret-val" `
           -Method POST -Body $updateBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
-        Write-Host "UPDATED" -ForegroundColor Yellow
+        Write-Host "UPDATED" -ForegroundColor Blue
         $updated++
       } catch {
         Write-Host "FAILED (update: $($_.Exception.Message))" -ForegroundColor Red
@@ -266,10 +269,10 @@ foreach ($entry in $secrets.GetEnumerator()) {
   }
 }
 
-Write-Host "`nDone: $created created, $updated updated, $failed failed." -ForegroundColor Cyan
+Write-Host "`nDone: $created created, $updated updated, $failed failed." -ForegroundColor Magenta
 
 # ---- Verify ----
-Write-Host "`nVerification - retrieving all provisioned secrets..." -ForegroundColor Cyan
+Write-Host "`nVerification - retrieving all provisioned secrets..." -ForegroundColor Magenta
 foreach ($entry in $secrets.GetEnumerator()) {
   $fullPath = "$SecretPrefix/$($entry.Key)"
   $getBody = @{
@@ -285,17 +288,17 @@ foreach ($entry in $secrets.GetEnumerator()) {
       $masked = $retrieved.Substring(0, [Math]::Min(8, $retrieved.Length)) + "..."
       Write-Host "  $fullPath = $masked" -ForegroundColor Green
     } else {
-      Write-Host "  $fullPath = (empty/null)" -ForegroundColor Yellow
+      Write-Host "  $fullPath = (empty/null)" -ForegroundColor Blue
     }
   } catch {
     Write-Host "  $fullPath = RETRIEVE FAILED" -ForegroundColor Red
   }
 }
 
-Write-Host "`nProvisioning complete." -ForegroundColor Cyan
+Write-Host "`nProvisioning complete." -ForegroundColor Magenta
 
 if (-not $secrets.ContainsKey("providers/anthropic-api-key")) {
   Write-Host ""
-  Write-Host "  Note: This run did not include an Anthropic API key. OpenClaw often defaults the agent model to Anthropic (Claude Opus). If the gateway runs but agent/chat fails, either add an Anthropic key in CipherTrust or change the default model to a provider you configured." -ForegroundColor Yellow
-  Write-Host "  (If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)" -ForegroundColor Cyan
+  Write-Host "  Note: This run did not include an Anthropic API key. OpenClaw often defaults the agent model to Anthropic (Claude Opus). If the gateway runs but agent/chat fails, either add an Anthropic key in CipherTrust or change the default model to a provider you configured." -ForegroundColor Blue
+  Write-Host "  (If Anthropic is already in CipherTrust from an earlier provision, you can ignore this.)" -ForegroundColor Blue
 }
