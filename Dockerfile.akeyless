@@ -9,9 +9,15 @@ LABEL maintainer="sanyambassi"
 COPY docker/akeyless-resolver.js /usr/local/bin/akeyless-resolver
 COPY docker/rotation-webhook.js /usr/local/bin/rotation-webhook.js
 COPY docker/entrypoint.sh /usr/local/bin/akeyless-entrypoint.sh
-RUN sed -i 's/\r$//' /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js \
-  && chmod 755 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js \
-  && chown 1000:1000 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js
+# Base image may run as non-root; sed -i writes temp files next to the target and fails in /usr/local/bin.
+USER root
+RUN set -e; \
+  for f in /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js; do \
+    sed 's/\r$//' "$f" > /tmp/crlf-fix.tmp && mv /tmp/crlf-fix.tmp "$f"; \
+  done; \
+  chmod 755 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js; \
+  chown 1000:1000 /usr/local/bin/akeyless-entrypoint.sh /usr/local/bin/akeyless-resolver /usr/local/bin/rotation-webhook.js
+USER node
 
 COPY --chown=1000:1000 docker/openclaw-akeyless.json /home/node/.openclaw/openclaw.json
 
