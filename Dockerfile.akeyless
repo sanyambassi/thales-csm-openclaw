@@ -16,7 +16,14 @@ CMD ["docker-entrypoint.sh", "node", "openclaw.mjs", "gateway", "--allow-unconfi
 #   AKEYLESS_GATEWAY_URL    - CipherTrust Secrets Manager endpoint
 #   AKEYLESS_ACCESS_ID      - Read-only access ID
 #   AKEYLESS_ACCESS_KEY     - Corresponding access key
-#   OPENCLAW_GATEWAY_TOKEN  - Gateway auth token
+#
+# LLM API keys and the gateway auth token are resolved via
+# OpenClaw's native SecretRef system (in-memory snapshot, no env vars).
+# Web search keys (Brave, Firecrawl, Tavily, Perplexity) are resolved
+# by the entrypoint and exported as env vars for plugin auto-detection.
+#
+# Optional — per-provider baseUrl overrides:
+#   <PROVIDER>_BASE_URL     - e.g. OPENAI_BASE_URL, ANTHROPIC_BASE_URL
 #
 # Optional — rotation webhook (disabled by default):
 #   ROTATION_WEBHOOK_ENABLED     - "true" to enable

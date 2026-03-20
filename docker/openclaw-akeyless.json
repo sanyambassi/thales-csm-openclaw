@@ -23,8 +23,100 @@
     }
   },
 
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/openai-api-key" }
+      },
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/anthropic-api-key" }
+      },
+      "google": {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/google-api-key" }
+      },
+      "xai": {
+        "baseUrl": "https://api.x.ai/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/xai-api-key" }
+      },
+      "mistral": {
+        "baseUrl": "https://api.mistral.ai/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/mistral-api-key" }
+      },
+      "groq": {
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/groq-api-key" }
+      },
+      "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/openrouter-api-key" }
+      },
+      "together": {
+        "baseUrl": "https://api.together.xyz/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/together-api-key" }
+      },
+      "cerebras": {
+        "baseUrl": "https://api.cerebras.ai/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/cerebras-api-key" }
+      },
+      "nvidia": {
+        "baseUrl": "https://integrate.api.nvidia.com/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/nvidia-api-key" }
+      },
+      "huggingface": {
+        "baseUrl": "https://api-inference.huggingface.co/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/huggingface-api-key" }
+      },
+      "minimax": {
+        "baseUrl": "https://api.minimax.chat/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/minimax-api-key" }
+      },
+      "moonshot": {
+        "baseUrl": "https://api.moonshot.cn/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/moonshot-api-key" }
+      },
+      "venice": {
+        "baseUrl": "https://api.venice.ai/api/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/venice-api-key" }
+      },
+      "modelstudio": {
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": [],
+        "apiKey": { "source": "exec", "provider": "akeyless", "id": "providers/modelstudio-api-key" }
+      }
+    }
+  },
+
   "gateway": {
-    "bind": "lan"
+    "bind": "lan",
+    "auth": {
+      "token": { "source": "exec", "provider": "akeyless", "id": "gateway/auth-token" }
+    }
+  },
+
+  "plugins": {
+    "entries": {
+      "brave":      { "enabled": true },
+      "firecrawl":  { "enabled": true },
+      "tavily":     { "enabled": true },
+      "perplexity": { "enabled": true }
+    }
   },
 
   "tools": {

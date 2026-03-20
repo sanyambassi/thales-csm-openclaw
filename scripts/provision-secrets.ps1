@@ -49,6 +49,10 @@ param(
   [string]$QianfanKey,
   [string]$ModelStudioKey,
   [string]$XiaomiKey,
+  [string]$BraveKey,
+  [string]$FirecrawlKey,
+  [string]$TavilyKey,
+  [string]$GatewayToken,
   [string]$SecretPrefix = "/openclaw",
   [switch]$NoPrompt
 )
@@ -117,7 +121,11 @@ $keys = @(
   @{ name = "Synthetic API Key";      path = "providers/synthetic-api-key";               param = $SyntheticKey;   hint = "SYNTHETIC_API_KEY" },
   @{ name = "Qianfan API Key";        path = "providers/qianfan-api-key";                 param = $QianfanKey;     hint = "QIANFAN_API_KEY" },
   @{ name = "ModelStudio API Key";    path = "providers/modelstudio-api-key";             param = $ModelStudioKey; hint = "MODELSTUDIO_API_KEY" },
-  @{ name = "Xiaomi API Key";         path = "providers/xiaomi-api-key";                  param = $XiaomiKey;      hint = "XIAOMI_API_KEY" }
+  @{ name = "Xiaomi API Key";         path = "providers/xiaomi-api-key";                  param = $XiaomiKey;      hint = "XIAOMI_API_KEY" },
+  @{ name = "Brave Search Key";     path = "websearch/brave-api-key";                   param = $BraveKey;       hint = "BRAVE_API_KEY" },
+  @{ name = "Firecrawl Search Key"; path = "websearch/firecrawl-api-key";               param = $FirecrawlKey;   hint = "FIRECRAWL_API_KEY" },
+  @{ name = "Tavily Search Key";    path = "websearch/tavily-api-key";                  param = $TavilyKey;      hint = "TAVILY_API_KEY" },
+  @{ name = "Gateway Auth Token";    path = "gateway/auth-token";                        param = $GatewayToken;   hint = "OPENCLAW_GATEWAY_TOKEN" }
 )
 
 foreach ($k in $keys) {

@@ -66,6 +66,10 @@ while [[ $# -gt 0 ]]; do
     --qianfan)       KEY_ARGS[providers/qianfan-api-key]="$2"; shift 2;;
     --modelstudio)   KEY_ARGS[providers/modelstudio-api-key]="$2"; shift 2;;
     --xiaomi)        KEY_ARGS[providers/xiaomi-api-key]="$2"; shift 2;;
+    --brave)         KEY_ARGS[websearch/brave-api-key]="$2"; shift 2;;
+    --firecrawl)     KEY_ARGS[websearch/firecrawl-api-key]="$2"; shift 2;;
+    --tavily)        KEY_ARGS[websearch/tavily-api-key]="$2"; shift 2;;
+    --gateway-token) KEY_ARGS[gateway/auth-token]="$2"; shift 2;;
     *) echo "Unknown option: $1"; exit 1;;
   esac
 done
@@ -178,6 +182,10 @@ PROVIDERS=(
   "providers/qianfan-api-key|Qianfan API Key|QIANFAN_API_KEY"
   "providers/modelstudio-api-key|ModelStudio API Key|MODELSTUDIO_API_KEY"
   "providers/xiaomi-api-key|Xiaomi API Key|XIAOMI_API_KEY"
+  "websearch/brave-api-key|Brave Search Key|BRAVE_API_KEY"
+  "websearch/firecrawl-api-key|Firecrawl Search Key|FIRECRAWL_API_KEY"
+  "websearch/tavily-api-key|Tavily Search Key|TAVILY_API_KEY"
+  "gateway/auth-token|Gateway Auth Token|OPENCLAW_GATEWAY_TOKEN"
 )
 
 declare -A SECRETS=()

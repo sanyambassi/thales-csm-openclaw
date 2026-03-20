@@ -16,14 +16,16 @@ services:
       AKEYLESS_GATEWAY_URL: "${AKEYLESS_GATEWAY_URL}"
       AKEYLESS_ACCESS_ID: "${AKEYLESS_ACCESS_ID}"
       AKEYLESS_ACCESS_KEY: "${AKEYLESS_ACCESS_KEY}"
-      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN}"
       NODE_OPTIONS: "--max-old-space-size=1536"
+      # --- Per-provider baseUrl overrides (uncomment to customize) ---
+      # OPENAI_BASE_URL: "https://my-openai-proxy.example.com/v1"
+      # ANTHROPIC_BASE_URL: "https://my-anthropic-proxy.example.com"
       # --- Rotation webhook (uncomment to enable) ---
       # ROTATION_WEBHOOK_ENABLED: "true"
       # ROTATION_WEBHOOK_PORT: "9090"
       # ROTATION_WEBHOOK_TOKEN: "${ROTATION_WEBHOOK_TOKEN}"
       # ROTATION_WEBHOOK_COOLDOWN_MS: "10000"
     ports:
-      - "3000:3000"
+      - "18789:18789"
       # - "9090:9090"  # Uncomment when rotation webhook is enabled
     restart: unless-stopped

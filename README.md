@@ -2,7 +2,7 @@
 
 Docker image integration for [OpenClaw](https://openclaw.ai) with **Thales CipherTrust Secrets Manager** (powered by [Akeyless](https://www.akeyless.io/)), designed for Thales CipherTrust environments.
 
-LLM API keys live in CipherTrust Secrets Manager — OpenClaw resolves them at startup via the exec SecretRef provider. No plaintext keys on disk.
+LLM API keys and the gateway auth token are resolved natively via OpenClaw's SecretRef system — keys live in OpenClaw's in-memory snapshot, never in environment variables or on disk. Web search provider keys (Brave, Firecrawl, Tavily, Perplexity) are resolved from CipherTrust at startup and exported as env vars for OpenClaw's web search subsystem.
 
 ## Base image
 
@@ -13,7 +13,6 @@ LLM API keys live in CipherTrust Secrets Manager — OpenClaw resolves them at s
 | **Pre-built image** | `docker.io/sanyambassi/thales-csm-openclaw:latest` |
 
 > Tags mirror the OpenClaw base version. For example, `2026.3.13-1` and `latest` both point to the same build.
-> To pin: `.\build-and-push.ps1 -OpenClawTag "2026.3.13-1"`
 
 ---
 
@@ -30,7 +29,7 @@ docker pull sanyambassi/thales-csm-openclaw:latest
 docker pull sanyambassi/thales-csm-openclaw:2026.3.13-1
 ```
 
-### 2. Provision your API keys into CipherTrust Secrets Manager
+### 2. Provision your secrets into CipherTrust Secrets Manager
 
 You need admin credentials for this one-time setup. The script prompts interactively for any keys you want to store:
 
@@ -39,12 +38,12 @@ You need admin credentials for this one-time setup. The script prompts interacti
 git clone https://github.com/sanyambassi/thales-csm-openclaw.git
 cd thales-csm-openclaw
 
-# Run the provisioning script (prompts for credentials + API keys)
+# Run the provisioning script (prompts for credentials + API keys + gateway token)
 .\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ./scripts/provision-secrets.sh           # Linux/macOS (bash)
 ```
 
-Secrets are created under `/openclaw/providers/` in CipherTrust Secrets Manager. You only need to provision the providers you actually use — skip the rest.
+Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest. The gateway auth token (`gateway/auth-token`) is required.
 
 ### 3. Create a `.env` file
 
@@ -55,10 +54,9 @@ AKEYLESS_GATEWAY_URL=https://your-ciphertrust-host/akeyless-api
 # Read-only credentials (NOT the admin ones — create a separate read-only role)
 AKEYLESS_ACCESS_ID=p-xxxxxxxxxx
 AKEYLESS_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxx
-
-# OpenClaw gateway auth token (choose any strong token)
-OPENCLAW_GATEWAY_TOKEN=your-gateway-token
 ```
+
+That's it — no API keys or gateway tokens in the `.env` file. They come from CipherTrust.
 
 ### 4. Run the container
 
@@ -66,7 +64,7 @@ OPENCLAW_GATEWAY_TOKEN=your-gateway-token
 docker run -d \
   --name openclaw \
   --env-file .env \
-  -p 3000:3000 \
+  -p 18789:18789 \
   sanyambassi/thales-csm-openclaw:latest
 ```
 
@@ -79,12 +77,12 @@ docker compose up -d
 ### 5. Verify
 
 ```bash
-# Check container health
 docker logs openclaw
 
 # You should see:
-#   [entrypoint] Resolved N API key(s) from CipherTrust Secrets Manager
-#   OpenClaw gateway listening on port 3000
+#   [entrypoint] Resolved N web search key(s) from CipherTrust
+#   [secrets] [SECRETS_GATEWAY_AUTH_SURFACE] gateway.auth.token is active
+#   [gateway] listening on ...
 ```
 
 ---
@@ -110,7 +108,7 @@ cd thales-csm-openclaw
 ```bash
 cp .env.example .env            # Linux/macOS
 copy .env.example .env          # Windows
-# Edit .env with your values
+# Edit .env with your CipherTrust endpoint and read-only credentials
 ```
 
 ### 4. Build locally
@@ -133,21 +131,17 @@ docker compose up -d
 
 ---
 
-## What's included
+## How it works
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile.akeyless` | Layers the integration onto the official OpenClaw image |
-| `docker-compose.yml` | Single-container deployment (CipherTrust appliance embeds the akeyless gateway) |
-| `docker/akeyless-resolver.js` | Exec SecretRef provider — authenticates with CipherTrust Secrets Manager and fetches secrets |
-| `docker/openclaw-akeyless.json` | OpenClaw config with SecretRef exec provider and web search enabled |
-| `docker/entrypoint.sh` | Custom entrypoint — resolves all API keys from CipherTrust as env vars before OpenClaw starts |
-| `docker/rotation-webhook.js` | Optional webhook listener for CipherTrust rotation events |
-| `scripts/provision-secrets.ps1` / `.sh` | Admin script to create/update secrets in CipherTrust Secrets Manager |
-| `scripts/build-and-push.ps1` / `.sh` | Build the image and push to Docker Hub |
-| `scripts/test-resolver.ps1` / `.sh` | End-to-end test suite for the resolver |
+Secrets are resolved from CipherTrust at startup through two complementary mechanisms:
 
-## Architecture
+- **Gateway auth token** — resolved via the `akeyless` exec provider (OpenClaw SecretRef), stored in OpenClaw's in-memory snapshot. Never in env vars or on disk.
+- **LLM API keys** — each provider in `models.providers` has an `apiKey` SecretRef pointing to CipherTrust. Resolved at startup and stored in the in-memory snapshot. Never in env vars or on disk.
+- **Web search API keys** (Brave, Firecrawl, Tavily, Perplexity) — resolved from CipherTrust by `entrypoint.sh` and exported as **in-memory env vars**. OpenClaw's web search plugins auto-detect these from the environment (e.g., `PERPLEXITY_API_KEY`). The plugins are explicitly enabled in the shipped config. Gemini, Grok, and Kimi web search reuse their LLM provider keys (already in the snapshot).
+
+> **Why env vars for web search?** OpenClaw's plugin system does not currently support SecretRef objects in `plugins.entries.<plugin>.config.webSearch.apiKey`. Web search keys are lower-value (no billing risk for most providers) and are only held as in-memory env vars — never written to disk.
+
+Unprovisioned providers are silently skipped.
 
 ```
 CipherTrust Appliance
@@ -157,61 +151,128 @@ CipherTrust Appliance
 │
 └── OpenClaw Container (this image)
     ├── entrypoint.sh
-    │   └── Resolves all API keys → exports as env vars
-    ├── akeyless-resolver (exec provider)
+    │   └── Fetches web search keys → in-memory env vars
+    ├── akeyless-resolver (exec SecretRef provider)
     │   ├── Authenticates with CipherTrust Secrets Manager
     │   └── Returns secrets via OpenClaw exec protocol
     └── OpenClaw Runtime
-        └── Built-in providers read keys from env vars
+        ├── Gateway token   → SecretRef → in-memory snapshot
+        ├── LLM API keys    → SecretRef → in-memory snapshot
+        └── Web search keys → env vars (auto-detected by plugins)
 ```
 
-## Supported providers
+## Pre-configured providers
 
-The entrypoint resolves keys for all API-key-based providers. Provision only what you need:
+The image ships with 15 providers pre-configured. Provision only the ones you need — the rest stay inactive:
 
-| Secret path | Env var | Provider |
-|-------------|---------|----------|
-| `providers/openai-api-key` | `OPENAI_API_KEY` | OpenAI |
-| `providers/google-api-key` | `GEMINI_API_KEY` | Google/Gemini |
-| `providers/anthropic-api-key` | `ANTHROPIC_API_KEY` | Anthropic |
-| `providers/xai-api-key` | `XAI_API_KEY` | xAI/Grok |
-| `providers/perplexity-api-key` | `PERPLEXITY_API_KEY` | Perplexity |
-| `providers/mistral-api-key` | `MISTRAL_API_KEY` | Mistral |
-| `providers/groq-api-key` | `GROQ_API_KEY` | Groq |
-| `providers/openrouter-api-key` | `OPENROUTER_API_KEY` | OpenRouter |
-| `providers/together-api-key` | `TOGETHER_API_KEY` | Together AI |
-| `providers/cerebras-api-key` | `CEREBRAS_API_KEY` | Cerebras |
-| `providers/nvidia-api-key` | `NVIDIA_API_KEY` | NVIDIA NIM |
-| `providers/huggingface-api-key` | `HF_TOKEN` | Hugging Face |
-| `providers/minimax-api-key` | `MINIMAX_API_KEY` | MiniMax |
-| `providers/moonshot-api-key` | `MOONSHOT_API_KEY` | Moonshot |
-| `providers/kimi-api-key` | `KIMI_API_KEY` | Kimi |
-| `providers/venice-api-key` | `VENICE_API_KEY` | Venice AI |
-| `providers/zai-api-key` | `ZAI_API_KEY` | Z.AI |
-| `providers/opencode-api-key` | `OPENCODE_API_KEY` | OpenCode |
-| `providers/kilocode-api-key` | `KILOCODE_API_KEY` | KiloCode |
-| `providers/vercel-ai-gateway-api-key` | `AI_GATEWAY_API_KEY` | Vercel AI Gateway |
-| `providers/cloudflare-ai-gateway-api-key` | `CLOUDFLARE_AI_GATEWAY_API_KEY` | Cloudflare AI Gateway |
-| `providers/volcengine-api-key` | `VOLCANO_ENGINE_API_KEY` | VolcEngine |
-| `providers/byteplus-api-key` | `BYTEPLUS_API_KEY` | BytePlus |
-| `providers/synthetic-api-key` | `SYNTHETIC_API_KEY` | Synthetic |
-| `providers/qianfan-api-key` | `QIANFAN_API_KEY` | Qianfan |
-| `providers/modelstudio-api-key` | `MODELSTUDIO_API_KEY` | ModelStudio |
-| `providers/xiaomi-api-key` | `XIAOMI_API_KEY` | Xiaomi |
+| Provider | Config key | Default base URL |
+|----------|-----------|-----------------|
+| OpenAI | `openai` | `https://api.openai.com/v1` |
+| Anthropic | `anthropic` | `https://api.anthropic.com` |
+| Google/Gemini | `google` | `https://generativelanguage.googleapis.com/v1beta` |
+| xAI/Grok | `xai` | `https://api.x.ai/v1` |
+| Mistral | `mistral` | `https://api.mistral.ai/v1` |
+| Groq | `groq` | `https://api.groq.com/openai/v1` |
+| OpenRouter | `openrouter` | `https://openrouter.ai/api/v1` |
+| Together AI | `together` | `https://api.together.xyz/v1` |
+| Cerebras | `cerebras` | `https://api.cerebras.ai/v1` |
+| NVIDIA NIM | `nvidia` | `https://integrate.api.nvidia.com/v1` |
+| Hugging Face | `huggingface` | `https://api-inference.huggingface.co/v1` |
+| MiniMax | `minimax` | `https://api.minimax.chat/v1` |
+| Moonshot/Kimi | `moonshot` | `https://api.moonshot.cn/v1` |
+| Venice AI | `venice` | `https://api.venice.ai/api/v1` |
+| ModelStudio | `modelstudio` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+
+### Overriding a base URL
+
+To point any provider at a proxy or custom endpoint, set a `<PROVIDER>_BASE_URL` environment variable:
+
+```bash
+docker run -d \
+  --env-file .env \
+  -e OPENAI_BASE_URL=https://my-openai-proxy.example.com/v1 \
+  -e ANTHROPIC_BASE_URL=https://my-anthropic-proxy.example.com \
+  sanyambassi/thales-csm-openclaw:latest
+```
+
+### Adding a provider not in the list
+
+Mount your own `openclaw.json` with additional providers:
+
+```bash
+docker run -d \
+  --env-file .env \
+  -v ./my-openclaw.json:/home/node/.openclaw/openclaw.json \
+  sanyambassi/thales-csm-openclaw:latest
+```
+
+## Supported secrets
+
+Provision only what you need. Unprovisioned providers are inactive — they don't block startup.
+
+| Secret path | Provider |
+|-------------|----------|
+| `gateway/auth-token` | **OpenClaw gateway auth** (required) |
+| `providers/openai-api-key` | OpenAI |
+| `providers/google-api-key` | Google/Gemini |
+| `providers/anthropic-api-key` | Anthropic |
+| `providers/xai-api-key` | xAI/Grok |
+| `providers/perplexity-api-key` | Perplexity (web search) |
+| `providers/mistral-api-key` | Mistral |
+| `providers/groq-api-key` | Groq |
+| `providers/openrouter-api-key` | OpenRouter |
+| `providers/together-api-key` | Together AI |
+| `providers/cerebras-api-key` | Cerebras |
+| `providers/nvidia-api-key` | NVIDIA NIM |
+| `providers/huggingface-api-key` | Hugging Face |
+| `providers/minimax-api-key` | MiniMax |
+| `providers/moonshot-api-key` | Moonshot/Kimi |
+| `providers/venice-api-key` | Venice AI |
+| `providers/modelstudio-api-key` | ModelStudio (Alibaba) |
+| `websearch/brave-api-key` | Brave Search |
+| `websearch/firecrawl-api-key` | Firecrawl Search |
+| `websearch/tavily-api-key` | Tavily Search |
+| `websearch/perplexity-api-key` | Perplexity Search |
+| `providers/volcengine-api-key` | VolcEngine |
+| `providers/byteplus-api-key` | BytePlus |
+| `providers/qianfan-api-key` | Qianfan (Baidu) |
+| `providers/xiaomi-api-key` | Xiaomi |
+| `providers/zai-api-key` | Z.AI |
+| `providers/opencode-api-key` | OpenCode |
+| `providers/kilocode-api-key` | KiloCode |
+| `providers/synthetic-api-key` | Synthetic |
+| `providers/vercel-ai-gateway-api-key` | Vercel AI Gateway |
+| `providers/cloudflare-ai-gateway-api-key` | Cloudflare AI Gateway |
+
+> Providers not in the pre-configured list (VolcEngine, BytePlus, Qianfan, Xiaomi, etc.) can be added by mounting a custom `openclaw.json` or by setting the corresponding `<PROVIDER>_BASE_URL` env var alongside a matching entry in the config.
 
 ## Environment variables
+
+Only CipherTrust connection credentials are needed as env vars — everything else comes from SecretRefs:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `AKEYLESS_GATEWAY_URL` | Yes | CipherTrust Secrets Manager endpoint |
 | `AKEYLESS_ACCESS_ID` | Yes | Read-only access ID for the resolver |
 | `AKEYLESS_ACCESS_KEY` | Yes | Corresponding access key |
-| `OPENCLAW_GATEWAY_TOKEN` | Yes | OpenClaw gateway auth token |
-| `AKEYLESS_SECRET_PREFIX` | No | Secret prefix (default: `/openclaw`) |
+| `<PROVIDER>_BASE_URL` | No | Override a provider's default API endpoint (e.g., `OPENAI_BASE_URL`) |
 | `ROTATION_WEBHOOK_ENABLED` | No | Set `true` to enable rotation webhook |
 | `ROTATION_WEBHOOK_PORT` | No | Webhook port (default: 9090) |
 | `ROTATION_WEBHOOK_TOKEN` | No | Shared secret for webhook auth |
 
+## What's included
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile.akeyless` | Layers the integration onto the official OpenClaw image |
+| `docker-compose.yml` | Single-container deployment |
+| `docker/akeyless-resolver.js` | Exec SecretRef provider — authenticates with CipherTrust and fetches secrets |
+| `docker/openclaw-akeyless.json` | OpenClaw config with SecretRef-based API keys and gateway token |
+| `docker/entrypoint.sh` | Custom entrypoint — resolves web search keys, applies baseUrl overrides, optional rotation webhook |
+| `docker/rotation-webhook.js` | Optional webhook listener for CipherTrust rotation events |
+| `scripts/provision-secrets.ps1` / `.sh` | Admin script to create/update secrets in CipherTrust |
+| `scripts/build-and-push.ps1` / `.sh` | Build the image and push to a registry |
+| `scripts/test-resolver.ps1` / `.sh` | End-to-end test suite for the resolver |
 
 ## License
 
