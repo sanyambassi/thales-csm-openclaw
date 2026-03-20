@@ -1,0 +1,29 @@
+# OpenClaw + Thales CipherTrust Secrets Manager (powered by Akeyless)
+#
+# Prerequisites:
+#   - CipherTrust appliance running with Akeyless Gateway enabled
+#   - Secrets provisioned via: .\scripts\provision-secrets.ps1
+#   - Copy .env.example to .env and fill in values
+#
+# Usage:
+#   docker compose up -d
+
+services:
+  openclaw:
+    image: ${OPENCLAW_IMAGE:-thales-csm-openclaw}:${OPENCLAW_AKEYLESS_TAG:-latest}
+    container_name: openclaw
+    environment:
+      AKEYLESS_GATEWAY_URL: "${AKEYLESS_GATEWAY_URL}"
+      AKEYLESS_ACCESS_ID: "${AKEYLESS_ACCESS_ID}"
+      AKEYLESS_ACCESS_KEY: "${AKEYLESS_ACCESS_KEY}"
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN}"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+      # --- Rotation webhook (uncomment to enable) ---
+      # ROTATION_WEBHOOK_ENABLED: "true"
+      # ROTATION_WEBHOOK_PORT: "9090"
+      # ROTATION_WEBHOOK_TOKEN: "${ROTATION_WEBHOOK_TOKEN}"
+      # ROTATION_WEBHOOK_COOLDOWN_MS: "10000"
+    ports:
+      - "3000:3000"
+      # - "9090:9090"  # Uncomment when rotation webhook is enabled
+    restart: unless-stopped

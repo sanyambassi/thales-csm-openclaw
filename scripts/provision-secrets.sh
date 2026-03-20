@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+#
+# Provisions LLM provider API keys into CipherTrust Secrets Manager (powered by Akeyless).
+# Run this once during initial setup, or when rotating keys.
+#
+# Usage:
+#   # Interactive - prompts for credentials and each provider key
+#   ./provision-secrets.sh
+#
+#   # Non-interactive via environment variables
+#   GATEWAY_URL="https://host/akeyless-api" ACCESS_ID="p-..." ACCESS_KEY="..." \
+#     OPENAI_KEY="sk-..." GOOGLE_KEY="AIza..." ./provision-secrets.sh --no-prompt
+#
+#   # Non-interactive via flags
+#   ./provision-secrets.sh \
+#     --gateway-url "https://host/akeyless-api" \
+#     --access-id "p-..." --access-key "..." \
+#     --openai "sk-..." --google "AIza..." --anthropic "sk-ant-..." \
+#     --xai "xai-..." --perplexity "pplx-..." --no-prompt
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Defaults & arg parsing
+# ---------------------------------------------------------------------------
+
+GATEWAY_URL="${GATEWAY_URL:-}"
+ACCESS_ID="${ACCESS_ID:-}"
+ACCESS_KEY="${ACCESS_KEY:-}"
+SECRET_PREFIX="${SECRET_PREFIX:-/openclaw}"
+NO_PROMPT=false
+
+declare -A KEY_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --gateway-url)   GATEWAY_URL="$2"; shift 2;;
+    --access-id)     ACCESS_ID="$2"; shift 2;;
+    --access-key)    ACCESS_KEY="$2"; shift 2;;
+    --secret-prefix) SECRET_PREFIX="$2"; shift 2;;
+    --no-prompt)     NO_PROMPT=true; shift;;
+    --openai)        KEY_ARGS[providers/openai-api-key]="$2"; shift 2;;
+    --google)        KEY_ARGS[providers/google-api-key]="$2"; shift 2;;
+    --anthropic)     KEY_ARGS[providers/anthropic-api-key]="$2"; shift 2;;
+    --xai)           KEY_ARGS[providers/xai-api-key]="$2"; shift 2;;
+    --perplexity)    KEY_ARGS[providers/perplexity-api-key]="$2"; shift 2;;
+    --mistral)       KEY_ARGS[providers/mistral-api-key]="$2"; shift 2;;
+    --groq)          KEY_ARGS[providers/groq-api-key]="$2"; shift 2;;
+    --openrouter)    KEY_ARGS[providers/openrouter-api-key]="$2"; shift 2;;
+    --together)      KEY_ARGS[providers/together-api-key]="$2"; shift 2;;
+    --cerebras)      KEY_ARGS[providers/cerebras-api-key]="$2"; shift 2;;
+    --nvidia)        KEY_ARGS[providers/nvidia-api-key]="$2"; shift 2;;
+    --huggingface)   KEY_ARGS[providers/huggingface-api-key]="$2"; shift 2;;
+    --minimax)       KEY_ARGS[providers/minimax-api-key]="$2"; shift 2;;
+    --moonshot)      KEY_ARGS[providers/moonshot-api-key]="$2"; shift 2;;
+    --kimi)          KEY_ARGS[providers/kimi-api-key]="$2"; shift 2;;
+    --venice)        KEY_ARGS[providers/venice-api-key]="$2"; shift 2;;
+    --zai)           KEY_ARGS[providers/zai-api-key]="$2"; shift 2;;
+    --opencode)      KEY_ARGS[providers/opencode-api-key]="$2"; shift 2;;
+    --kilocode)      KEY_ARGS[providers/kilocode-api-key]="$2"; shift 2;;
+    --vercel-ai-gw)  KEY_ARGS[providers/vercel-ai-gateway-api-key]="$2"; shift 2;;
+    --cloudflare-ai-gw) KEY_ARGS[providers/cloudflare-ai-gateway-api-key]="$2"; shift 2;;
+    --volcengine)    KEY_ARGS[providers/volcengine-api-key]="$2"; shift 2;;
+    --byteplus)      KEY_ARGS[providers/byteplus-api-key]="$2"; shift 2;;
+    --synthetic)     KEY_ARGS[providers/synthetic-api-key]="$2"; shift 2;;
+    --qianfan)       KEY_ARGS[providers/qianfan-api-key]="$2"; shift 2;;
+    --modelstudio)   KEY_ARGS[providers/modelstudio-api-key]="$2"; shift 2;;
+    --xiaomi)        KEY_ARGS[providers/xiaomi-api-key]="$2"; shift 2;;
+    *) echo "Unknown option: $1"; exit 1;;
+  esac
+done
+
+# Colors
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+
+# ---------------------------------------------------------------------------
+# Prompt helpers
+# ---------------------------------------------------------------------------
+
+prompt_value() {
+  local label="$1" default="$2"
+  if [[ -n "$default" ]]; then echo "$default"; return; fi
+  if $NO_PROMPT; then echo ""; return; fi
+  read -rp "  $label: " val
+  echo "$val"
+}
+
+prompt_secret() {
+  local label="$1" default="$2"
+  if [[ -n "$default" ]]; then echo "$default"; return; fi
+  if $NO_PROMPT; then echo ""; return; fi
+  read -rsp "  $label: " val; echo >&2
+  echo "$val"
+}
+
+# ---------------------------------------------------------------------------
+# Prompt for missing credentials
+# ---------------------------------------------------------------------------
+
+if [[ -z "$GATEWAY_URL" ]]; then
+  GATEWAY_URL=$(prompt_value "CipherTrust Secrets Manager URL (e.g. https://host/akeyless-api)" "")
+fi
+GATEWAY_URL="${GATEWAY_URL%/}"
+
+if [[ -z "$ACCESS_ID" ]]; then
+  ACCESS_ID=$(prompt_value "Access ID" "")
+fi
+if [[ -z "$ACCESS_KEY" ]]; then
+  ACCESS_KEY=$(prompt_secret "Access Key" "")
+fi
+
+# ---------------------------------------------------------------------------
+# curl helper
+# ---------------------------------------------------------------------------
+
+api_post() {
+  local endpoint="$1" body="$2"
+  curl -sS --fail-with-body --max-time 30 \
+    -H "Content-Type: application/json" \
+    -d "$body" \
+    "${GATEWAY_URL}${endpoint}" 2>&1
+}
+
+api_post_allow_fail() {
+  local endpoint="$1" body="$2"
+  curl -sS --max-time 30 \
+    -H "Content-Type: application/json" \
+    -d "$body" \
+    "${GATEWAY_URL}${endpoint}" 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# Authenticate
+# ---------------------------------------------------------------------------
+
+echo -e "\n${CYAN}[1/3] Authenticating with CipherTrust Secrets Manager...${NC}"
+AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${ACCESS_ID}\",\"access-key\":\"${ACCESS_KEY}\",\"access-type\":\"access_key\"}")
+TOKEN=$(echo "$AUTH_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+if [[ -z "$TOKEN" ]]; then
+  echo -e "  ${RED}Authentication failed${NC}"
+  echo "$AUTH_RESP"
+  exit 1
+fi
+echo -e "  ${GREEN}Authenticated (token prefix: ${TOKEN:0:12}...)${NC}"
+
+# ---------------------------------------------------------------------------
+# Collect keys
+# ---------------------------------------------------------------------------
+
+echo -e "\n${CYAN}[2/3] Collecting API keys (press Enter to skip a provider)...${NC}"
+
+PROVIDERS=(
+  "providers/openai-api-key|OpenAI API Key|OPENAI_API_KEY"
+  "providers/google-api-key|Google/Gemini Key|GEMINI_API_KEY"
+  "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
+  "providers/xai-api-key|xAI/Grok API Key|XAI_API_KEY"
+  "providers/perplexity-api-key|Perplexity API Key|PERPLEXITY_API_KEY"
+  "providers/mistral-api-key|Mistral API Key|MISTRAL_API_KEY"
+  "providers/groq-api-key|Groq API Key|GROQ_API_KEY"
+  "providers/openrouter-api-key|OpenRouter API Key|OPENROUTER_API_KEY"
+  "providers/together-api-key|Together API Key|TOGETHER_API_KEY"
+  "providers/cerebras-api-key|Cerebras API Key|CEREBRAS_API_KEY"
+  "providers/nvidia-api-key|NVIDIA API Key|NVIDIA_API_KEY"
+  "providers/huggingface-api-key|Hugging Face Token|HF_TOKEN"
+  "providers/minimax-api-key|MiniMax API Key|MINIMAX_API_KEY"
+  "providers/moonshot-api-key|Moonshot API Key|MOONSHOT_API_KEY"
+  "providers/kimi-api-key|Kimi API Key|KIMI_API_KEY"
+  "providers/venice-api-key|Venice API Key|VENICE_API_KEY"
+  "providers/zai-api-key|Z.AI API Key|ZAI_API_KEY"
+  "providers/opencode-api-key|OpenCode API Key|OPENCODE_API_KEY"
+  "providers/kilocode-api-key|KiloCode API Key|KILOCODE_API_KEY"
+  "providers/vercel-ai-gateway-api-key|Vercel AI Gateway Key|AI_GATEWAY_API_KEY"
+  "providers/cloudflare-ai-gateway-api-key|Cloudflare AI Gateway Key|CLOUDFLARE_AI_GATEWAY_API_KEY"
+  "providers/volcengine-api-key|VolcEngine API Key|VOLCANO_ENGINE_API_KEY"
+  "providers/byteplus-api-key|BytePlus API Key|BYTEPLUS_API_KEY"
+  "providers/synthetic-api-key|Synthetic API Key|SYNTHETIC_API_KEY"
+  "providers/qianfan-api-key|Qianfan API Key|QIANFAN_API_KEY"
+  "providers/modelstudio-api-key|ModelStudio API Key|MODELSTUDIO_API_KEY"
+  "providers/xiaomi-api-key|Xiaomi API Key|XIAOMI_API_KEY"
+)
+
+declare -A SECRETS=()
+
+for entry in "${PROVIDERS[@]}"; do
+  IFS='|' read -r path name hint <<< "$entry"
+  existing="${KEY_ARGS[$path]:-}"
+  val=$(prompt_value "$name [$hint]" "$existing")
+  if [[ -n "$val" ]]; then
+    SECRETS[$path]="$val"
+  fi
+done
+
+if [[ ${#SECRETS[@]} -eq 0 ]]; then
+  echo -e "\n  ${YELLOW}No keys provided - nothing to provision.${NC}"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Provision
+# ---------------------------------------------------------------------------
+
+echo -e "\n${CYAN}[3/3] Provisioning ${#SECRETS[@]} secret(s) in CipherTrust Secrets Manager...${NC}"
+
+created=0; updated=0; failed=0
+
+for path in "${!SECRETS[@]}"; do
+  full_path="${SECRET_PREFIX}/${path}"
+  value="${SECRETS[$path]}"
+  printf "  %s ... " "$full_path"
+
+  # Escape value for JSON (handle special chars)
+  json_value=$(printf '%s' "$value" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$value")
+  body="{\"name\":\"${full_path}\",\"value\":${json_value},\"token\":\"${TOKEN}\"}"
+
+  resp=$(api_post_allow_fail "/v2/create-secret" "$body")
+  if echo "$resp" | grep -qi "already exists\|AlreadyExists"; then
+    resp=$(api_post_allow_fail "/v2/update-secret-val" "$body")
+    if echo "$resp" | grep -qi "error\|fail"; then
+      echo -e "${RED}FAILED (update)${NC}"
+      ((failed++))
+    else
+      echo -e "${YELLOW}UPDATED${NC}"
+      ((updated++))
+    fi
+  elif echo "$resp" | grep -qi "error\|fail"; then
+    echo -e "${RED}FAILED${NC}"
+    ((failed++))
+  else
+    echo -e "${GREEN}CREATED${NC}"
+    ((created++))
+  fi
+done
+
+echo -e "\n${CYAN}Done: $created created, $updated updated, $failed failed.${NC}"
+
+# ---------------------------------------------------------------------------
+# Verify
+# ---------------------------------------------------------------------------
+
+echo -e "\n${CYAN}Verification - retrieving all provisioned secrets...${NC}"
+
+for path in "${!SECRETS[@]}"; do
+  full_path="${SECRET_PREFIX}/${path}"
+  body="{\"names\":[\"${full_path}\"],\"token\":\"${TOKEN}\"}"
+  resp=$(api_post_allow_fail "/v2/get-secret-value" "$body")
+  val=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('${full_path}',''))" 2>/dev/null || echo "")
+  if [[ -n "$val" ]]; then
+    masked="${val:0:8}..."
+    echo -e "  ${GREEN}${full_path} = ${masked}${NC}"
+  else
+    echo -e "  ${RED}${full_path} = (empty/null)${NC}"
+  fi
+done
+
+echo -e "\n${CYAN}Provisioning complete.${NC}"

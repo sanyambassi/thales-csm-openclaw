@@ -1,0 +1,25 @@
+ARG OPENCLAW_TAG=latest
+FROM ghcr.io/openclaw/openclaw:${OPENCLAW_TAG}
+
+LABEL description="OpenClaw with Thales CipherTrust Secrets Manager integration (powered by Akeyless)"
+LABEL maintainer="sanyambassi"
+
+COPY --chmod=755 --chown=1000:1000 docker/akeyless-resolver.js /usr/local/bin/akeyless-resolver
+COPY --chmod=755 --chown=1000:1000 docker/rotation-webhook.js /usr/local/bin/rotation-webhook.js
+COPY --chmod=755 --chown=1000:1000 docker/entrypoint.sh /usr/local/bin/akeyless-entrypoint.sh
+COPY --chown=1000:1000 docker/openclaw-akeyless.json /home/node/.openclaw/openclaw.json
+
+ENTRYPOINT ["/usr/local/bin/akeyless-entrypoint.sh"]
+CMD ["docker-entrypoint.sh", "node", "openclaw.mjs", "gateway", "--allow-unconfigured"]
+
+# Runtime env vars (set by CipherTrust orchestration):
+#   AKEYLESS_GATEWAY_URL    - CipherTrust Secrets Manager endpoint
+#   AKEYLESS_ACCESS_ID      - Read-only access ID
+#   AKEYLESS_ACCESS_KEY     - Corresponding access key
+#   OPENCLAW_GATEWAY_TOKEN  - Gateway auth token
+#
+# Optional — rotation webhook (disabled by default):
+#   ROTATION_WEBHOOK_ENABLED     - "true" to enable
+#   ROTATION_WEBHOOK_PORT        - default 9090
+#   ROTATION_WEBHOOK_TOKEN       - shared secret for auth
+#   ROTATION_WEBHOOK_COOLDOWN_MS - min ms between reloads (default 10000)

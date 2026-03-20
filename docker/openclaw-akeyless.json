@@ -1,0 +1,44 @@
+{
+  "secrets": {
+    "providers": {
+      "akeyless": {
+        "source": "exec",
+        "command": "/usr/local/bin/akeyless-resolver",
+        "args": ["--secret-prefix", "/openclaw"],
+        "passEnv": [
+          "AKEYLESS_ACCESS_ID",
+          "AKEYLESS_ACCESS_KEY",
+          "AKEYLESS_GATEWAY_URL"
+        ],
+        "jsonOnly": true
+      }
+    },
+    "defaults": {
+      "exec": "akeyless"
+    },
+    "resolution": {
+      "maxProviderConcurrency": 4,
+      "maxRefsPerProvider": 512,
+      "maxBatchBytes": 262144
+    }
+  },
+
+  "gateway": {
+    "bind": "lan"
+  },
+
+  "tools": {
+    "web": {
+      "search": {
+        "enabled": true
+      }
+    }
+  },
+
+  "agents": {
+    "defaults": {
+      "sandbox": { "mode": "off" }
+    },
+    "list": []
+  }
+}
