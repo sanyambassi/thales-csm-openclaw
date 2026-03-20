@@ -21,6 +21,9 @@
 #
 #   # Falls back to read-only credentials from .env if no admin creds given
 #   ./provision-secrets.sh --openai "sk-..." --no-prompt
+#
+#   # Only create/update the OpenClaw gateway token (required for gateway to start)
+#   ./provision-secrets.sh --generate-gateway-token --no-prompt
 
 set -uo pipefail
 
@@ -47,6 +50,12 @@ while [[ $# -gt 0 ]]; do
     --access-key)        ACCESS_KEY="$2"; shift 2;;
     --secret-prefix)     SECRET_PREFIX="$2"; shift 2;;
     --no-prompt)     NO_PROMPT=true; shift;;
+    --generate-gateway-token)
+      KEY_ARGS[gateway/auth-token]="$(python3 -c 'import secrets; print(secrets.token_hex(32))' 2>/dev/null || openssl rand -hex 32 2>/dev/null)"
+      if [[ -z "${KEY_ARGS[gateway/auth-token]}" ]]; then
+        echo "Need python3 or openssl for --generate-gateway-token"; exit 1
+      fi
+      shift;;
     --openai)        KEY_ARGS[providers/openai-api-key]="$2"; shift 2;;
     --google)        KEY_ARGS[providers/google-api-key]="$2"; shift 2;;
     --anthropic)     KEY_ARGS[providers/anthropic-api-key]="$2"; shift 2;;
@@ -211,9 +220,10 @@ echo -e "  ${GREEN}Authenticated (token prefix: ${TOKEN:0:12}...)${NC}"
 # Collect keys
 # ---------------------------------------------------------------------------
 
-echo -e "\n${CYAN}[2/3] Collecting API keys (press Enter to skip a provider)...${NC}"
+echo -e "\n${CYAN}[2/3] Collecting API keys (Gateway token first — required for OpenClaw; press Enter to skip optional providers)...${NC}"
 
 PROVIDERS=(
+  "gateway/auth-token|OpenClaw Gateway Auth Token (required)|OPENCLAW_GATEWAY_TOKEN"
   "providers/openai-api-key|OpenAI API Key|OPENAI_API_KEY"
   "providers/google-api-key|Google/Gemini Key|GEMINI_API_KEY"
   "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
@@ -244,7 +254,6 @@ PROVIDERS=(
   "websearch/brave-api-key|Brave Search Key|BRAVE_API_KEY"
   "websearch/firecrawl-api-key|Firecrawl Search Key|FIRECRAWL_API_KEY"
   "websearch/tavily-api-key|Tavily Search Key|TAVILY_API_KEY"
-  "gateway/auth-token|Gateway Auth Token|OPENCLAW_GATEWAY_TOKEN"
 )
 
 declare -A SECRETS=()

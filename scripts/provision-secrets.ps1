@@ -56,10 +56,18 @@ param(
   [string]$TavilyKey,
   [string]$GatewayToken,
   [string]$SecretPrefix = "/openclaw",
-  [switch]$NoPrompt
+  [switch]$NoPrompt,
+  [switch]$GenerateGatewayToken
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($GenerateGatewayToken -and -not $GatewayToken) {
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $GatewayToken = -join ($bytes | ForEach-Object { $_.ToString("x2") })
+}
 
 # ---- Auto-load .env if present ----
 $scriptDir = Split-Path -Parent $PSScriptRoot
@@ -126,6 +134,7 @@ function PromptKey($name, $param, $envHint) {
 }
 
 $keys = @(
+  @{ name = "OpenClaw Gateway Auth Token (required)"; path = "gateway/auth-token"; param = $GatewayToken; hint = "OPENCLAW_GATEWAY_TOKEN" },
   @{ name = "OpenAI API Key";           path = "providers/openai-api-key";                  param = $OpenAIKey;      hint = "OPENAI_API_KEY" },
   @{ name = "Google/Gemini Key";        path = "providers/google-api-key";                  param = $GoogleKey;      hint = "GEMINI_API_KEY" },
   @{ name = "Anthropic API Key";        path = "providers/anthropic-api-key";               param = $AnthropicKey;   hint = "ANTHROPIC_API_KEY" },
@@ -155,8 +164,7 @@ $keys = @(
   @{ name = "Xiaomi API Key";         path = "providers/xiaomi-api-key";                  param = $XiaomiKey;      hint = "XIAOMI_API_KEY" },
   @{ name = "Brave Search Key";     path = "websearch/brave-api-key";                   param = $BraveKey;       hint = "BRAVE_API_KEY" },
   @{ name = "Firecrawl Search Key"; path = "websearch/firecrawl-api-key";               param = $FirecrawlKey;   hint = "FIRECRAWL_API_KEY" },
-  @{ name = "Tavily Search Key";    path = "websearch/tavily-api-key";                  param = $TavilyKey;      hint = "TAVILY_API_KEY" },
-  @{ name = "Gateway Auth Token";    path = "gateway/auth-token";                        param = $GatewayToken;   hint = "OPENCLAW_GATEWAY_TOKEN" }
+  @{ name = "Tavily Search Key";    path = "websearch/tavily-api-key";                  param = $TavilyKey;      hint = "TAVILY_API_KEY" }
 )
 
 foreach ($k in $keys) {

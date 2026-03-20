@@ -59,7 +59,15 @@ chmod +x scripts/*.sh
 .\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ```
 
-Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest. The gateway auth token (`gateway/auth-token`) is required.
+Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest.
+
+**Gateway auth token (`/openclaw/gateway/auth-token`) is required** — without it OpenClaw fails with `gateway.auth.token resolved to a non-string or empty value`. The provision script asks for it first. To create only that secret (e.g. after fixing a failed deploy):
+
+```bash
+./scripts/provision-secrets.sh --generate-gateway-token --no-prompt
+```
+
+(PowerShell: `.\scripts\provision-secrets.ps1 -GenerateGatewayToken -NoPrompt`)
 
 ### 4. Run the container
 
