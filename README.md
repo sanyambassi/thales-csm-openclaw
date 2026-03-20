@@ -125,25 +125,10 @@ docker build --build-arg OPENCLAW_TAG=latest -f Dockerfile.akeyless -t thales-cs
 docker compose up -d
 ```
 
-> **Pushing to a registry** (optional — only needed for remote/Kubernetes deployments):
->
-> Set your Docker Hub username, then run the script. It auto-detects the OpenClaw base version and tags accordingly.
+> **Pushing to a registry** (optional — only if deploying to remote machines or Kubernetes):
 > ```bash
-> # Via environment variable
-> export DOCKERHUB_USER=yourusername          # Linux/macOS
-> $env:DOCKERHUB_USER = "yourusername"        # Windows (PowerShell)
->
-> # Build + push (auto-tags with version + latest)
-> ./scripts/build-and-push.sh                 # Linux/macOS
-> .\scripts\build-and-push.ps1                # Windows
->
-> # Or pass username directly
-> ./scripts/build-and-push.sh --user yourusername
-> .\scripts\build-and-push.ps1 -DockerHubUser yourusername
-> ```
-> Then update your `.env` to point to your image:
-> ```
-> OPENCLAW_IMAGE=yourusername/thales-csm-openclaw
+> ./scripts/build-and-push.sh --user yourusername        # Linux/macOS
+> .\scripts\build-and-push.ps1 -DockerHubUser yourusername  # Windows
 > ```
 
 ---
@@ -153,7 +138,7 @@ docker compose up -d
 | File | Purpose |
 |------|---------|
 | `Dockerfile.akeyless` | Layers the integration onto the official OpenClaw image |
-| `docker-compose.yml` | Single-container deployment (CipherTrust appliance runs the gateway) |
+| `docker-compose.yml` | Single-container deployment (CipherTrust appliance embeds the akeyless gateway) |
 | `docker/akeyless-resolver.js` | Exec SecretRef provider — authenticates with CipherTrust Secrets Manager and fetches secrets |
 | `docker/openclaw-akeyless.json` | OpenClaw config with SecretRef exec provider and web search enabled |
 | `docker/entrypoint.sh` | Custom entrypoint — resolves all API keys from CipherTrust as env vars before OpenClaw starts |
