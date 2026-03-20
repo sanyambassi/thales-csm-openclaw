@@ -77,12 +77,15 @@ docker run -d \
   --env-file .env \
   -p 18789:18789 \
   sanyambassi/thales-csm-openclaw:latest
+
+docker logs -f openclaw   # follow startup; Ctrl+C to stop (container keeps running)
 ```
 
 Or use the included `docker-compose.yml`:
 
 ```bash
 docker compose up -d
+docker logs -f openclaw   # follow startup; Ctrl+C to stop (container keeps running)
 ```
 
 ### 5. Verify
@@ -138,6 +141,7 @@ docker build --build-arg OPENCLAW_TAG=latest -f Dockerfile.akeyless -t thales-cs
 
 ```bash
 docker compose up -d
+docker logs -f openclaw   # follow startup; Ctrl+C to stop (container keeps running)
 ```
 
 > **Pushing to a registry** (optional — only if deploying to remote machines or Kubernetes):
