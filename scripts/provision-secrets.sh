@@ -158,7 +158,7 @@ prompt_secret() {
   else
     echo "" >&2
   fi
-  echo "$val"
+  printf '%s\n' "$val"
 }
 
 # ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ PROVIDERS=(
   "websearch/tavily-api-key|Tavily Search Key|TAVILY_API_KEY"
 )
 
-declare -A SECRETS=()
+# Do NOT re-declare SECRETS here — it would clear gateway/auth-token from step [2/4].
 
 for entry in "${PROVIDERS[@]}"; do
   IFS='|' read -r path name hint <<< "$entry"

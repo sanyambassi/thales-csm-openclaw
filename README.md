@@ -99,6 +99,12 @@ docker logs openclaw
 #   [gateway] listening on ...
 ```
 
+**Logs say `N provider(s) verified in CipherTrust` but you only provisioned one?**  
+The entrypoint probes each provider path in the config. **Any secret that still exists** in CipherTrust from an earlier run counts as verified — delete unused secrets in CSM if you want fewer active providers.
+
+**`gateway.auth.token` empty or unresolved?**  
+Ensure `/openclaw/gateway/auth-token` exists in CipherTrust (provision step **[2/4]**), or set **`OPENCLAW_GATEWAY_TOKEN`** for the container (see [Environment variables](#environment-variables)).
+
 ---
 
 ## Option B: Build your own image
