@@ -6,9 +6,8 @@
 # Gateway auth token: CipherTrust SecretRef by default, or OPENCLAW_GATEWAY_TOKEN
 # env (entrypoint patches config — overrides SecretRef).
 #
-# Web search provider keys (Brave, Firecrawl, Tavily, Perplexity) are
-# resolved from CipherTrust at startup and exported as env vars, since
-# OpenClaw's web search subsystem reads them from the environment.
+# Web search only — Brave, Firecrawl, Tavily, Perplexity keys from CipherTrust → in-memory env:
+#   BRAVE_API_KEY, FIRECRAWL_API_KEY, TAVILY_API_KEY, PERPLEXITY_API_KEY
 #
 # This entrypoint handles these tasks before handing off to OpenClaw:
 #   0. Optional: gateway.auth.token from OPENCLAW_GATEWAY_TOKEN (bypasses SecretRef)

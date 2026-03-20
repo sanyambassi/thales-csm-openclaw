@@ -61,7 +61,7 @@ while [[ $# -gt 0 ]]; do
     --google)        KEY_ARGS[providers/google-api-key]="$2"; shift 2;;
     --anthropic)     KEY_ARGS[providers/anthropic-api-key]="$2"; shift 2;;
     --xai)           KEY_ARGS[providers/xai-api-key]="$2"; shift 2;;
-    --perplexity)    KEY_ARGS[providers/perplexity-api-key]="$2"; shift 2;;
+    --perplexity)    KEY_ARGS[websearch/perplexity-api-key]="$2"; shift 2;;
     --mistral)       KEY_ARGS[providers/mistral-api-key]="$2"; shift 2;;
     --groq)          KEY_ARGS[providers/groq-api-key]="$2"; shift 2;;
     --openrouter)    KEY_ARGS[providers/openrouter-api-key]="$2"; shift 2;;
@@ -230,6 +230,15 @@ fi
 gw_val="${KEY_ARGS[gateway/auth-token]:-}"
 # Do not use [[ ... && ! $NO_PROMPT ]] — with NO_PROMPT=false that becomes [[ ! false ]] where
 # "false" is a non-empty string (true), so ! makes the test fail and the gateway step is skipped.
+if [[ -n "$gw_val" ]]; then
+  echo -e "\n${CYAN}[2/4] OpenClaw gateway auth token${NC}"
+  if [[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" && "$gw_val" == "$OPENCLAW_GATEWAY_TOKEN" ]]; then
+    echo -e "  ${GREEN}Using OPENCLAW_GATEWAY_TOKEN from environment or .env — skipping prompt.${NC}"
+    echo -e "  ${YELLOW}Want a prompt instead?${NC} ${YELLOW}unset OPENCLAW_GATEWAY_TOKEN${NC} or remove it from ${YELLOW}.env${NC} for this run."
+  else
+    echo -e "  ${GREEN}Using gateway token from ${YELLOW}--gateway-token${NC} or ${YELLOW}--generate-gateway-token${NC} — skipping prompt.${NC}"
+  fi
+fi
 if [[ -z "$gw_val" ]] && ! $NO_PROMPT; then
   echo -e "\n${CYAN}[2/4] OpenClaw gateway auth token (required for gateway to start)${NC}"
   echo -e "  ${YELLOW}Tip:${NC} set OPENCLAW_GATEWAY_TOKEN in .env or pass ${YELLOW}--gateway-token${NC} / ${YELLOW}--generate-gateway-token${NC}"
@@ -253,7 +262,6 @@ PROVIDERS=(
   "providers/google-api-key|Google/Gemini Key|GEMINI_API_KEY"
   "providers/xai-api-key|xAI/Grok API Key|XAI_API_KEY"
   "providers/anthropic-api-key|Anthropic API Key|ANTHROPIC_API_KEY"
-  "providers/perplexity-api-key|Perplexity API Key|PERPLEXITY_API_KEY"
   "providers/mistral-api-key|Mistral API Key|MISTRAL_API_KEY"
   "providers/groq-api-key|Groq API Key|GROQ_API_KEY"
   "providers/openrouter-api-key|OpenRouter API Key|OPENROUTER_API_KEY"
@@ -279,6 +287,7 @@ PROVIDERS=(
   "websearch/brave-api-key|Brave Search Key|BRAVE_API_KEY"
   "websearch/firecrawl-api-key|Firecrawl Search Key|FIRECRAWL_API_KEY"
   "websearch/tavily-api-key|Tavily Search Key|TAVILY_API_KEY"
+  "websearch/perplexity-api-key|Perplexity API Key (web search)|PERPLEXITY_API_KEY"
 )
 
 # Do NOT re-declare SECRETS here — it would clear gateway/auth-token from step [2/4].

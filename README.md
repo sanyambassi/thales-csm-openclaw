@@ -180,13 +180,13 @@ This is convenient for remote access but **less strict than an explicit allowlis
 At container startup, the custom entrypoint authenticates with CipherTrust once and performs two key operations before handing off to OpenClaw:
 
 1. **Provider pruning** — checks which LLM provider secrets are actually provisioned in CipherTrust and removes any unprovisioned providers from the config. This lets the image ship with 15 pre-configured providers while only activating the ones you've provisioned.
-2. **Web search key resolution** — fetches web search API keys (Brave, Firecrawl, Tavily, Perplexity) from CipherTrust and exports them as in-memory env vars.
+2. **Web search key resolution** — fetches the four web-search secrets from CipherTrust (`websearch/…`) and exports **`BRAVE_API_KEY`**, **`FIRECRAWL_API_KEY`**, **`TAVILY_API_KEY`**, **`PERPLEXITY_API_KEY`** as in-memory env vars.
 
 Once OpenClaw starts, it resolves the remaining secrets natively:
 
 - **Gateway auth token** — resolved via the `akeyless` exec provider (OpenClaw SecretRef), stored in OpenClaw's in-memory snapshot. Never in env vars or on disk.
 - **LLM API keys** — each remaining provider has an `apiKey` SecretRef pointing to CipherTrust. Resolved at startup into the in-memory snapshot. Never in env vars or on disk.
-- **Web search API keys** — auto-detected from the env vars set by the entrypoint (e.g., `PERPLEXITY_API_KEY`). Gemini, Grok, and Kimi web search reuse their LLM provider keys (already in the snapshot).
+- **Web search API keys** — auto-detected from the **four** in-process env vars the entrypoint sets (all web search only): `BRAVE_API_KEY`, `FIRECRAWL_API_KEY`, `TAVILY_API_KEY`, `PERPLEXITY_API_KEY`. Gemini, Grok, and Kimi web search reuse their LLM provider keys (already in the snapshot).
 
 > **Why env vars for web search?** OpenClaw's plugin system does not currently support SecretRef objects for web search API keys. These keys are only held as in-memory env vars — never written to disk.
 
@@ -266,7 +266,6 @@ Provision only what you need. Unprovisioned providers are inactive — they don'
 | `providers/google-api-key` | Google/Gemini |
 | `providers/anthropic-api-key` | Anthropic |
 | `providers/xai-api-key` | xAI/Grok |
-| `providers/perplexity-api-key` | Perplexity (web search) |
 | `providers/mistral-api-key` | Mistral |
 | `providers/groq-api-key` | Groq |
 | `providers/openrouter-api-key` | OpenRouter |
@@ -278,10 +277,6 @@ Provision only what you need. Unprovisioned providers are inactive — they don'
 | `providers/moonshot-api-key` | Moonshot/Kimi |
 | `providers/venice-api-key` | Venice AI |
 | `providers/modelstudio-api-key` | ModelStudio (Alibaba) |
-| `websearch/brave-api-key` | Brave Search |
-| `websearch/firecrawl-api-key` | Firecrawl Search |
-| `websearch/tavily-api-key` | Tavily Search |
-| `websearch/perplexity-api-key` | Perplexity Search |
 | `providers/volcengine-api-key` | VolcEngine |
 | `providers/byteplus-api-key` | BytePlus |
 | `providers/qianfan-api-key` | Qianfan (Baidu) |
@@ -292,6 +287,17 @@ Provision only what you need. Unprovisioned providers are inactive — they don'
 | `providers/synthetic-api-key` | Synthetic |
 | `providers/vercel-ai-gateway-api-key` | Vercel AI Gateway |
 | `providers/cloudflare-ai-gateway-api-key` | Cloudflare AI Gateway |
+
+### Web search (CipherTrust → in-memory env)
+
+These four are **only** for OpenClaw’s web search tools. They are **not** LLM provider keys. Store them under **`websearch/…`** in CipherTrust; the entrypoint fetches them at startup and exports the matching env vars (nothing to put in `.env` for these):
+
+| CipherTrust path (under your prefix) | Runtime env var (web search) |
+|-------------------------------------|------------------------------|
+| `websearch/brave-api-key` | `BRAVE_API_KEY` |
+| `websearch/firecrawl-api-key` | `FIRECRAWL_API_KEY` |
+| `websearch/tavily-api-key` | `TAVILY_API_KEY` |
+| `websearch/perplexity-api-key` | `PERPLEXITY_API_KEY` |
 
 > Providers not in the pre-configured list (VolcEngine, BytePlus, Qianfan, Xiaomi, etc.) can be added by mounting a custom `openclaw.json` or by setting the corresponding `<PROVIDER>_BASE_URL` env var alongside a matching entry in the config.
 

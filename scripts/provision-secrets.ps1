@@ -131,6 +131,15 @@ Write-Host "  Authenticated (token prefix: $($token.Substring(0,12))...)" -Foreg
 $secrets = @{}
 
 $needsGatewayPrompt = [string]::IsNullOrWhiteSpace($GatewayToken) -and -not $NoPrompt.IsPresent
+if (-not $needsGatewayPrompt -and -not [string]::IsNullOrWhiteSpace($GatewayToken)) {
+  Write-Host "`n[2/4] OpenClaw gateway auth token" -ForegroundColor Cyan
+  if ($GatewayToken -eq $env:OPENCLAW_GATEWAY_TOKEN) {
+    Write-Host "  Using OPENCLAW_GATEWAY_TOKEN from environment or .env — skipping prompt." -ForegroundColor Green
+    Write-Host "  Want a prompt instead? Remove OPENCLAW_GATEWAY_TOKEN from .env or clear it for this session." -ForegroundColor Yellow
+  } else {
+    Write-Host "  Using gateway token from -GatewayToken or -GenerateGatewayToken — skipping prompt." -ForegroundColor Green
+  }
+}
 if ($needsGatewayPrompt) {
   Write-Host "`n[2/4] OpenClaw gateway auth token (required for gateway to start)" -ForegroundColor Cyan
   Write-Host "  Tip: set OPENCLAW_GATEWAY_TOKEN in .env or use -GenerateGatewayToken" -ForegroundColor Yellow
@@ -162,7 +171,6 @@ $keys = @(
   @{ name = "Google/Gemini Key";        path = "providers/google-api-key";                  param = $GoogleKey;      hint = "GEMINI_API_KEY" },
   @{ name = "xAI/Grok API Key";        path = "providers/xai-api-key";                     param = $XAIKey;         hint = "XAI_API_KEY" },
   @{ name = "Anthropic API Key";        path = "providers/anthropic-api-key";               param = $AnthropicKey;   hint = "ANTHROPIC_API_KEY" },
-  @{ name = "Perplexity API Key";       path = "providers/perplexity-api-key";              param = $PerplexityKey;  hint = "PERPLEXITY_API_KEY" },
   @{ name = "Mistral API Key";          path = "providers/mistral-api-key";                 param = $MistralKey;     hint = "MISTRAL_API_KEY" },
   @{ name = "Groq API Key";            path = "providers/groq-api-key";                    param = $GroqKey;        hint = "GROQ_API_KEY" },
   @{ name = "OpenRouter API Key";       path = "providers/openrouter-api-key";              param = $OpenRouterKey;  hint = "OPENROUTER_API_KEY" },
@@ -187,7 +195,8 @@ $keys = @(
   @{ name = "Xiaomi API Key";         path = "providers/xiaomi-api-key";                  param = $XiaomiKey;      hint = "XIAOMI_API_KEY" },
   @{ name = "Brave Search Key";     path = "websearch/brave-api-key";                   param = $BraveKey;       hint = "BRAVE_API_KEY" },
   @{ name = "Firecrawl Search Key"; path = "websearch/firecrawl-api-key";               param = $FirecrawlKey;   hint = "FIRECRAWL_API_KEY" },
-  @{ name = "Tavily Search Key";    path = "websearch/tavily-api-key";                  param = $TavilyKey;      hint = "TAVILY_API_KEY" }
+  @{ name = "Tavily Search Key";    path = "websearch/tavily-api-key";                  param = $TavilyKey;      hint = "TAVILY_API_KEY" },
+  @{ name = "Perplexity API Key (web search)"; path = "websearch/perplexity-api-key"; param = $PerplexityKey; hint = "PERPLEXITY_API_KEY" }
 )
 
 foreach ($k in $keys) {

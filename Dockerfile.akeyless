@@ -22,8 +22,8 @@ CMD ["docker-entrypoint.sh", "node", "openclaw.mjs", "gateway", "--allow-unconfi
 #
 # LLM API keys and the gateway auth token are resolved via
 # OpenClaw's native SecretRef system (in-memory snapshot, no env vars).
-# Web search keys (Brave, Firecrawl, Tavily, Perplexity) are resolved
-# by the entrypoint and exported as env vars for plugin auto-detection.
+# Web search only: entrypoint resolves CipherTrust websearch/* → BRAVE_API_KEY,
+# FIRECRAWL_API_KEY, TAVILY_API_KEY, PERPLEXITY_API_KEY (in-memory; not in .env).
 #
 # Optional — per-provider baseUrl overrides:
 #   <PROVIDER>_BASE_URL     - e.g. OPENAI_BASE_URL, ANTHROPIC_BASE_URL
