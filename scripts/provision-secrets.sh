@@ -3,31 +3,32 @@
 # Provisions LLM provider API keys into CipherTrust Secrets Manager (powered by Akeyless).
 # Run this once during initial setup, or when rotating keys.
 #
+# The script reads CipherTrust credentials from:
+#   1. Command-line flags (--gateway-url, --access-id, --access-key)
+#   2. Environment variables (AKEYLESS_GATEWAY_URL, AKEYLESS_ACCESS_ID, AKEYLESS_ACCESS_KEY)
+#   3. .env file in the repo root (auto-loaded if present)
+#   4. Interactive prompts (if none of the above)
+#
 # Usage:
 #   # Interactive - prompts for credentials and each provider key
 #   ./provision-secrets.sh
-#
-#   # Non-interactive via environment variables
-#   GATEWAY_URL="https://host/akeyless-api" ACCESS_ID="p-..." ACCESS_KEY="..." \
-#     OPENAI_KEY="sk-..." GOOGLE_KEY="AIza..." ./provision-secrets.sh --no-prompt
 #
 #   # Non-interactive via flags
 #   ./provision-secrets.sh \
 #     --gateway-url "https://host/akeyless-api" \
 #     --access-id "p-..." --access-key "..." \
-#     --openai "sk-..." --google "AIza..." --anthropic "sk-ant-..." \
-#     --xai "xai-..." --perplexity "pplx-..." --no-prompt
+#     --openai "sk-..." --google "AIza..." --no-prompt
 
-set -euo pipefail
+set -uo pipefail
 
 # ---------------------------------------------------------------------------
 # Defaults & arg parsing
 # ---------------------------------------------------------------------------
 
-GATEWAY_URL="${GATEWAY_URL:-}"
-ACCESS_ID="${ACCESS_ID:-}"
-ACCESS_KEY="${ACCESS_KEY:-}"
-SECRET_PREFIX="${SECRET_PREFIX:-/openclaw}"
+GATEWAY_URL="${AKEYLESS_GATEWAY_URL:-${GATEWAY_URL:-}}"
+ACCESS_ID="${AKEYLESS_ACCESS_ID:-${ACCESS_ID:-}}"
+ACCESS_KEY="${AKEYLESS_ACCESS_KEY:-${ACCESS_KEY:-}}"
+SECRET_PREFIX="${AKEYLESS_SECRET_PREFIX:-${SECRET_PREFIX:-/openclaw}}"
 NO_PROMPT=false
 
 declare -A KEY_ARGS=()
@@ -78,6 +79,42 @@ done
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 # ---------------------------------------------------------------------------
+# Auto-load .env if present (look in script dir parent or cwd)
+# ---------------------------------------------------------------------------
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+load_env_file() {
+  local envfile="$1"
+  if [[ -f "$envfile" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="${line%%#*}"
+      line="${line// /}"
+      [[ -z "$line" ]] && continue
+      if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+        local key="${BASH_REMATCH[1]}"
+        local val="${BASH_REMATCH[2]}"
+        val="${val%\"}" ; val="${val#\"}"
+        val="${val%\'}" ; val="${val#\'}"
+        if [[ -z "${!key:-}" ]]; then
+          export "$key=$val"
+        fi
+      fi
+    done < "$envfile"
+  fi
+}
+
+for candidate in "$REPO_ROOT/.env" "$PWD/.env"; do
+  load_env_file "$candidate"
+done
+
+# Re-read after .env load (env vars might have been set)
+GATEWAY_URL="${AKEYLESS_GATEWAY_URL:-${GATEWAY_URL:-}}"
+ACCESS_ID="${AKEYLESS_ACCESS_ID:-${ACCESS_ID:-}}"
+ACCESS_KEY="${AKEYLESS_ACCESS_KEY:-${ACCESS_KEY:-}}"
+
+# ---------------------------------------------------------------------------
 # Prompt helpers
 # ---------------------------------------------------------------------------
 
@@ -93,7 +130,12 @@ prompt_secret() {
   local label="$1" default="$2"
   if [[ -n "$default" ]]; then echo "$default"; return; fi
   if $NO_PROMPT; then echo ""; return; fi
-  read -rsp "  $label: " val; echo >&2
+  read -rsp "  $label: " val
+  if [[ -n "$val" ]]; then
+    echo -e " ********" >&2
+  else
+    echo "" >&2
+  fi
   echo "$val"
 }
 
@@ -113,19 +155,16 @@ if [[ -z "$ACCESS_KEY" ]]; then
   ACCESS_KEY=$(prompt_secret "Access Key" "")
 fi
 
+if [[ -z "$GATEWAY_URL" || -z "$ACCESS_ID" || -z "$ACCESS_KEY" ]]; then
+  echo -e "\n  ${RED}Error: CipherTrust URL, Access ID, and Access Key are all required.${NC}"
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 # curl helper
 # ---------------------------------------------------------------------------
 
 api_post() {
-  local endpoint="$1" body="$2"
-  curl -sS --fail-with-body --max-time 30 \
-    -H "Content-Type: application/json" \
-    -d "$body" \
-    "${GATEWAY_URL}${endpoint}" 2>&1
-}
-
-api_post_allow_fail() {
   local endpoint="$1" body="$2"
   curl -sS --max-time 30 \
     -H "Content-Type: application/json" \
@@ -138,7 +177,7 @@ api_post_allow_fail() {
 # ---------------------------------------------------------------------------
 
 echo -e "\n${CYAN}[1/3] Authenticating with CipherTrust Secrets Manager...${NC}"
-AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${ACCESS_ID}\",\"access-key\":\"${ACCESS_KEY}\",\"access-type\":\"access_key\"}")
+AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${ACCESS_ID}\",\"access-key\":\"${ACCESS_KEY}\",\"access-type\":\"access_key\"}" || true)
 TOKEN=$(echo "$AUTH_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -z "$TOKEN" ]]; then
@@ -217,13 +256,12 @@ for path in "${!SECRETS[@]}"; do
   value="${SECRETS[$path]}"
   printf "  %s ... " "$full_path"
 
-  # Escape value for JSON (handle special chars)
   json_value=$(printf '%s' "$value" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$value")
   body="{\"name\":\"${full_path}\",\"value\":${json_value},\"token\":\"${TOKEN}\"}"
 
-  resp=$(api_post_allow_fail "/v2/create-secret" "$body")
+  resp=$(api_post "/v2/create-secret" "$body" || true)
   if echo "$resp" | grep -qi "already exists\|AlreadyExists"; then
-    resp=$(api_post_allow_fail "/v2/update-secret-val" "$body")
+    resp=$(api_post "/v2/update-secret-val" "$body" || true)
     if echo "$resp" | grep -qi "error\|fail"; then
       echo -e "${RED}FAILED (update)${NC}"
       ((failed++))
@@ -233,6 +271,7 @@ for path in "${!SECRETS[@]}"; do
     fi
   elif echo "$resp" | grep -qi "error\|fail"; then
     echo -e "${RED}FAILED${NC}"
+    echo "    $resp" >&2
     ((failed++))
   else
     echo -e "${GREEN}CREATED${NC}"
@@ -251,7 +290,7 @@ echo -e "\n${CYAN}Verification - retrieving all provisioned secrets...${NC}"
 for path in "${!SECRETS[@]}"; do
   full_path="${SECRET_PREFIX}/${path}"
   body="{\"names\":[\"${full_path}\"],\"token\":\"${TOKEN}\"}"
-  resp=$(api_post_allow_fail "/v2/get-secret-value" "$body")
+  resp=$(api_post "/v2/get-secret-value" "$body" || true)
   val=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('${full_path}',''))" 2>/dev/null || echo "")
   if [[ -n "$val" ]]; then
     masked="${val:0:8}..."
