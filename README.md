@@ -29,23 +29,7 @@ docker pull sanyambassi/thales-csm-openclaw:latest
 docker pull sanyambassi/thales-csm-openclaw:2026.3.13-1
 ```
 
-### 2. Provision your secrets into CipherTrust Secrets Manager
-
-You need admin credentials for this one-time setup. The script prompts interactively for any keys you want to store:
-
-```bash
-# Clone the repo for the provisioning script
-git clone https://github.com/sanyambassi/thales-csm-openclaw.git
-cd thales-csm-openclaw
-
-# Run the provisioning script (prompts for credentials + API keys + gateway token)
-.\scripts\provision-secrets.ps1          # Windows (PowerShell)
-./scripts/provision-secrets.sh           # Linux/macOS (bash)
-```
-
-Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest. The gateway auth token (`gateway/auth-token`) is required.
-
-### 3. Create a `.env` file
+### 2. Create a `.env` file
 
 ```bash
 # CipherTrust Secrets Manager endpoint
@@ -56,7 +40,23 @@ AKEYLESS_ACCESS_ID=p-xxxxxxxxxx
 AKEYLESS_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxx
 ```
 
-That's it — no API keys or gateway tokens in the `.env` file. They come from CipherTrust.
+That's it — no AI provider/LLM API keys or gateway tokens in the `.env` file. They come from CipherTrust.
+
+### 3. Provision your secrets into CipherTrust Secrets Manager
+
+You need admin credentials for this one-time setup. The script prompts interactively for the CipherTrust URL, admin credentials, and each API key you want to store:
+
+```bash
+# Clone the repo for the provisioning script
+git clone https://github.com/sanyambassi/thales-csm-openclaw.git
+cd thales-csm-openclaw
+
+# Run the provisioning script (prompts for everything — no files needed)
+.\scripts\provision-secrets.ps1          # Windows (PowerShell)
+./scripts/provision-secrets.sh           # Linux/macOS (bash)
+```
+
+Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest. The gateway auth token (`gateway/auth-token`) is required.
 
 ### 4. Run the container
 
@@ -96,19 +96,21 @@ git clone https://github.com/sanyambassi/thales-csm-openclaw.git
 cd thales-csm-openclaw
 ```
 
-### 2. Provision secrets
-
-```bash
-.\scripts\provision-secrets.ps1          # Windows (PowerShell)
-./scripts/provision-secrets.sh           # Linux/macOS (bash)
-```
-
-### 3. Copy and fill in env vars
+### 2. Copy and fill in env vars
 
 ```bash
 cp .env.example .env            # Linux/macOS
 copy .env.example .env          # Windows
 # Edit .env with your CipherTrust endpoint and read-only credentials
+```
+
+### 3. Provision secrets
+
+The script prompts for the CipherTrust URL, admin credentials, and each API key — it does not read from `.env`:
+
+```bash
+.\scripts\provision-secrets.ps1          # Windows (PowerShell)
+./scripts/provision-secrets.sh           # Linux/macOS (bash)
 ```
 
 ### 4. Build locally
