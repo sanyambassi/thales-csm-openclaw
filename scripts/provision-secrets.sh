@@ -194,7 +194,11 @@ if [[ -n "$ADMIN_ACCESS_ID" ]]; then
   echo -e "  Using admin credentials"
 fi
 AUTH_RESP=$(api_post "/v2/auth" "{\"access-id\":\"${EFFECTIVE_ID}\",\"access-key\":\"${EFFECTIVE_KEY}\",\"access-type\":\"access_key\"}" || true)
-TOKEN=$(echo "$AUTH_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+# Parse token with JSON (API may return "token": "..." with spaces — grep '"token":"' misses that)
+TOKEN=$(printf '%s' "$AUTH_RESP" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("token") or "")' 2>/dev/null || true)
+if [[ -z "$TOKEN" ]]; then
+  TOKEN=$(printf '%s' "$AUTH_RESP" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+fi
 
 if [[ -z "$TOKEN" ]]; then
   echo -e "  ${RED}Authentication failed${NC}"
