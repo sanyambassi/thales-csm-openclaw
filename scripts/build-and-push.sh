@@ -60,6 +60,8 @@ docker pull "${BASE_IMAGE}"
 # ---------------------------------------------------------------------------
 
 echo -e "${CYAN}[2/5] Detecting OpenClaw version...${NC}"
+# Go template must use real double quotes around the label key (inside outer single quotes).
+# Do not use \" — that passes a backslash to docker and breaks template parsing.
 VERSION_LABEL=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "${BASE_IMAGE}" 2>/dev/null || true)
 
 if [[ -z "$VERSION_LABEL" || "$VERSION_LABEL" == "<no value>" ]]; then

@@ -38,10 +38,12 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to pull base image" }
 
 # Detect the OpenClaw version from the base image labels/env
 Write-Host "[2/5] Detecting OpenClaw version..." -ForegroundColor Cyan
-$fmt = '{{ index .Config.Labels \"org.opencontainers.image.version\" }}'
+# Use literal " inside single-quoted string (same as build-and-push.sh). Do not use \" — PowerShell
+# passes backslash+quote to docker, which breaks the Go template and yields a false "missing" label.
+$fmt = '{{ index .Config.Labels "org.opencontainers.image.version" }}'
 $versionLabel = docker inspect --format $fmt $baseImage 2>$null
 if (-not $versionLabel -or $versionLabel -eq '<no value>') {
-  $fmt2 = '{{ index .Config.Labels \"version\" }}'
+  $fmt2 = '{{ index .Config.Labels "version" }}'
   $versionLabel = docker inspect --format $fmt2 $baseImage 2>$null
 }
 if ((-not $versionLabel -or $versionLabel -eq '<no value>') -and $OpenClawTag -ne "latest") {
