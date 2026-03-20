@@ -51,9 +51,12 @@ You need admin credentials for this one-time setup. The script prompts interacti
 git clone https://github.com/sanyambassi/thales-csm-openclaw.git
 cd thales-csm-openclaw
 
+# Linux/macOS — make scripts executable first
+chmod +x scripts/*.sh
+
 # Run the provisioning script (prompts for everything — no files needed)
-.\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ./scripts/provision-secrets.sh           # Linux/macOS (bash)
+.\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ```
 
 Secrets are created under `/openclaw/` in CipherTrust. You only need to provision the providers you actually use — skip the rest. The gateway auth token (`gateway/auth-token`) is required.
@@ -109,8 +112,11 @@ copy .env.example .env          # Windows
 The script prompts for the CipherTrust URL, admin credentials, and each API key — it does not read from `.env`:
 
 ```bash
-.\scripts\provision-secrets.ps1          # Windows (PowerShell)
+# Linux/macOS — make scripts executable first
+chmod +x scripts/*.sh
+
 ./scripts/provision-secrets.sh           # Linux/macOS (bash)
+.\scripts\provision-secrets.ps1          # Windows (PowerShell)
 ```
 
 ### 4. Build locally
