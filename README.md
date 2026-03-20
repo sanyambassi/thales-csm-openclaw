@@ -8,8 +8,8 @@ LLM API keys live in CipherTrust Secrets Manager — OpenClaw resolves them at s
 
 | | |
 |---|---|
-| **OpenClaw GA version** | `2026.3.13-1` |
-| **Base image** | `ghcr.io/openclaw/openclaw:latest` (at time of build) |
+| **OpenClaw GA version** | `2026.3.13-1` (at time of build) |
+| **Base image** | `ghcr.io/openclaw/openclaw:latest` |
 | **Pre-built image** | `docker.io/sanyambassi/thales-csm-openclaw:latest` |
 
 > Tags mirror the OpenClaw base version. For example, `2026.3.13-1` and `latest` both point to the same build.
