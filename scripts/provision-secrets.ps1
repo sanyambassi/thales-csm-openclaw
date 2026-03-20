@@ -3,20 +3,23 @@
 # Provisions LLM provider API keys into CipherTrust Secrets Manager (powered by Akeyless).
 # Run this once during initial setup, or when rotating keys.
 #
+# Credentials: auto-loads repo .env (AKEYLESS_* , OPENCLAW_GATEWAY_TOKEN, AKEYLESS_ADMIN_*).
+# Gateway token is prompted in step [2/4] after CipherTrust auth (or use env / flags below).
+#
 # Usage:
-#   # Interactive — prompts for credentials and each provider key
+#   # Interactive
 #   .\provision-secrets.ps1
 #
-#   # Non-interactive — pass common providers
-#   .\provision-secrets.ps1 `
-#     -GatewayUrl "https://ciphertrust-host/akeyless-api" `
-#     -AccessId "p-..." `
-#     -AccessKey "..." `
-#     -OpenAIKey "sk-proj-..." `
-#     -GoogleKey "AIzaSy..." `
-#     -AnthropicKey "sk-ant-..." `
-#     -XAIKey "xai-..." `
-#     -PerplexityKey "pplx-..."
+#   # Non-interactive — gateway + providers (OpenClaw requires gateway/auth-token in CSM)
+#   .\provision-secrets.ps1 -NoPrompt `
+#     -GatewayToken (New-Guid).Guid `
+#     -OpenAIKey "sk-..." -AnthropicKey "sk-ant-..."
+#
+#   # Auto-generate gateway token only
+#   .\provision-secrets.ps1 -GenerateGatewayToken -NoPrompt
+#
+#   # Same as bash: admin role separate from read-only .env
+#   .\provision-secrets.ps1 -AdminAccessId "p-..." -AdminAccessKey "..."
 
 param(
   [string]$GatewayUrl,
@@ -122,10 +125,13 @@ $authResp = Invoke-RestMethod -Uri "$GatewayUrl/v2/auth" `
 $token = $authResp.token
 Write-Host "  Authenticated (token prefix: $($token.Substring(0,12))...)" -ForegroundColor Green
 
-# ---- Gateway token first (env OPENCLAW_GATEWAY_TOKEN, -GatewayToken, or prompt) ----
+# ---- Gateway token first (env OPENCLAW_GATEWAY_TOKEN, -GatewayToken, -GenerateGatewayToken, or prompt) ----
+# Use [switch] -NoPrompt explicitly: unlike bash, there is no "false" string bug here;
+# -NoPrompt.IsPresent is $false when the switch is omitted.
 $secrets = @{}
 
-if (-not $GatewayToken -and -not $NoPrompt) {
+$needsGatewayPrompt = [string]::IsNullOrWhiteSpace($GatewayToken) -and -not $NoPrompt.IsPresent
+if ($needsGatewayPrompt) {
   Write-Host "`n[2/4] OpenClaw gateway auth token (required for gateway to start)" -ForegroundColor Cyan
   Write-Host "  Tip: set OPENCLAW_GATEWAY_TOKEN in .env or use -GenerateGatewayToken" -ForegroundColor Yellow
   $sec = Read-Host "  Gateway token [OPENCLAW_GATEWAY_TOKEN]" -AsSecureString
@@ -135,11 +141,13 @@ if (-not $GatewayToken -and -not $NoPrompt) {
   }
 }
 
-if ($GatewayToken) { $secrets["gateway/auth-token"] = $GatewayToken }
+if (-not [string]::IsNullOrWhiteSpace($GatewayToken)) {
+  $secrets["gateway/auth-token"] = $GatewayToken.Trim()
+}
 
 function PromptKey($name, $param, $envHint) {
   if ($param) { return $param }
-  if ($NoPrompt) { return $null }
+  if ($NoPrompt.IsPresent) { return $null }
   $val = Read-Host "  $name [$envHint]"
   if ($val) { return $val }
   return $null
@@ -188,6 +196,10 @@ foreach ($k in $keys) {
 if ($secrets.Count -eq 0) {
   Write-Host "`n  No keys provided - nothing to provision." -ForegroundColor Yellow
   exit 0
+}
+
+if ($NoPrompt.IsPresent -and -not $secrets.ContainsKey("gateway/auth-token")) {
+  Write-Warning "This run did not include a gateway token. OpenClaw needs /openclaw/gateway/auth-token in CSM or OPENCLAW_GATEWAY_TOKEN on the container (see README)."
 }
 
 # ---- Provision ----
